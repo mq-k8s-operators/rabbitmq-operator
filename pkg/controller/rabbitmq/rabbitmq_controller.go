@@ -3,13 +3,10 @@ package rabbitmq
 import (
 	"context"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/helm/pkg/chartutil"
-	"k8s.io/kubernetes/pkg/registry/core/persistentvolumeclaim"
-
 	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
 
-	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -159,25 +156,63 @@ func newPodForCR(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Pod {
 
 func newService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 	return &corev1.Service{
-		TypeMeta:   metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v2",
-			Kind: "Service",
+			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-
+			Name:   "rabbitmq",
+			Labels: map[string]string{"app": "rabbitmq"},
 		},
-		Spec:       corev1.ServiceSpec{},
-		Status:     corev1.ServiceStatus{},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "None",
+			Ports: []corev1.ServicePort{
+				corev1.ServicePort{
+					Port: 5672,
+					Name: "amqp",
+				},
+			},
+			Selector: map[string]string{"app": "rabbitmq"},
+		},
 	}
 }
 
-func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq)  *appsv1.StatefulSet{
+func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
+	return &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind:       "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq-service",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				corev1.ServicePort{
+					Port:     15672,
+					Name:     "test1",
+					Protocol: corev1.ProtocolTCP,
+					NodePort: 32001,
+				},
+				corev1.ServicePort{
+					Port:     5672,
+					Name:     "test2",
+					Protocol: corev1.ProtocolTCP,
+					NodePort: 32002,
+				},
+			},
+			Selector: map[string]string{"app": "rabbitmq"},
+		},
+	}
+}
+
+func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 
 	//set metadata -> label
 	var alabels map[string]string
 	alabels["app"] = "rabbitmq"
 	//set ImagePullSecret
-	var name  corev1.LocalObjectReference
+	var name corev1.LocalObjectReference
 	name.Name = "regsecret"
 	secrets := []corev1.LocalObjectReference{name}
 	//set container
@@ -186,52 +221,122 @@ func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq)  *appsv1.StatefulSet{
 	container.Image = cr.Spec.Image
 	container.ImagePullPolicy = corev1.PullIfNotPresent
 	limits := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU: resource.Quantity{nil, nil, "256", resource.BinarySI},
+		corev1.ResourceCPU:    resource.Quantity{nil, nil, "256", resource.BinarySI},
 		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
 	}
 	requests := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU: resource.Quantity{nil, nil, "512", resource.BinarySI},
+		corev1.ResourceCPU:    resource.Quantity{nil, nil, "512", resource.BinarySI},
 		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
 	}
 	container.Resources.Limits = limits
 	container.Resources.Requests = requests
 	container.VolumeMounts = []corev1.VolumeMount{corev1.VolumeMount{
-		Name: "rabbitmq-data",
+		Name:      "rabbitmq-data",
 		MountPath: "/var/lib/rabbitmq/mnesia",
 	}}
 	container.Env = cr.Spec.Envs
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v2",
-			Kind: "StatefulSet",
+			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "rabbitmq",
 		},
-		Spec:appsv1.StatefulSetSpec{
+		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "rabbitmq",
-			Replicas: &cr.Spec.Size,
+			Replicas:    &cr.Spec.Size,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:alabels,
+					Labels: alabels,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "rabbitmq",
-					ImagePullSecrets: secrets,
-					Containers: []corev1.Container{container},
-					Volumes:[]corev1.Volume{
+					ImagePullSecrets:   secrets,
+					Containers:         []corev1.Container{container},
+					Volumes: []corev1.Volume{
 						corev1.Volume{
 							Name: "rabbitmq-data",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName:"rabbitmq-data-claim"},
+									ClaimName: "rabbitmq-data-claim"},
 							},
 						},
 					},
 				},
 			},
 			Selector: &metav1.LabelSelector{
-				MatchLabels:alabels,
+				MatchLabels: alabels,
+			},
+		},
+	}
+}
+
+func newServiceAccount(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind:       "ServiceAccount",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq",
+		},
+	}
+}
+
+func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
+	return &corev1.PersistentVolume{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind:       "PersistentVolume",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq-data",
+			Labels: map[string]string{
+				"release": "rabbitmq-data",
+			},
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity: map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceStorage: resource.Quantity{nil, nil, "2", "Gi"},
+			},
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			StorageClassName: "managed-nfs-storage",
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				NFS: &corev1.NFSVolumeSource{
+					Server: "/home/k8s/nfs/data/pv001",
+					Path:   "127.0.0.1",
+				},
+			},
+		},
+	}
+}
+
+func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
+	var scn string
+	scn = "managed-nfs-storage"
+	return &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq-data-claim",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			StorageClassName: &scn,
+			Resources: corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceStorage: resource.Quantity{nil, nil, "2", "Gi"},
+				},
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"release": "rabbitmq-data"},
 			},
 		},
 	}
