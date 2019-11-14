@@ -14,7 +14,7 @@ type RabbitmqSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Size    int             `json:"size"`
+	Size    int32            `json:"size"`
 	Image   string          `json:"image,omitempty"`
 	Envs    []corev1.EnvVar `json:"envs,omitempty"`
 }

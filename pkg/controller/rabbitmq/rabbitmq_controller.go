@@ -2,10 +2,14 @@ package rabbitmq
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/helm/pkg/chartutil"
+	"k8s.io/kubernetes/pkg/registry/core/persistentvolumeclaim"
 
 	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -148,6 +152,86 @@ func newPodForCR(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Pod {
 					Image:   "busybox",
 					Command: []string{"sleep", "3600"},
 				},
+			},
+		},
+	}
+}
+
+func newService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
+	return &corev1.Service{
+		TypeMeta:   metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind: "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+
+		},
+		Spec:       corev1.ServiceSpec{},
+		Status:     corev1.ServiceStatus{},
+	}
+}
+
+func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq)  *appsv1.StatefulSet{
+
+	//set metadata -> label
+	var alabels map[string]string
+	alabels["app"] = "rabbitmq"
+	//set ImagePullSecret
+	var name  corev1.LocalObjectReference
+	name.Name = "regsecret"
+	secrets := []corev1.LocalObjectReference{name}
+	//set container
+	var container corev1.Container
+	container.Name = "rabbitmq"
+	container.Image = cr.Spec.Image
+	container.ImagePullPolicy = corev1.PullIfNotPresent
+	limits := map[corev1.ResourceName]resource.Quantity{
+		corev1.ResourceCPU: resource.Quantity{nil, nil, "256", resource.BinarySI},
+		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
+	}
+	requests := map[corev1.ResourceName]resource.Quantity{
+		corev1.ResourceCPU: resource.Quantity{nil, nil, "512", resource.BinarySI},
+		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
+	}
+	container.Resources.Limits = limits
+	container.Resources.Requests = requests
+	container.VolumeMounts = []corev1.VolumeMount{corev1.VolumeMount{
+		Name: "rabbitmq-data",
+		MountPath: "/var/lib/rabbitmq/mnesia",
+	}}
+	container.Env = cr.Spec.Envs
+	return &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v2",
+			Kind: "StatefulSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq",
+		},
+		Spec:appsv1.StatefulSetSpec{
+			ServiceName: "rabbitmq",
+			Replicas: &cr.Spec.Size,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:alabels,
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: "rabbitmq",
+					ImagePullSecrets: secrets,
+					Containers: []corev1.Container{container},
+					Volumes:[]corev1.Volume{
+						corev1.Volume{
+							Name: "rabbitmq-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName:"rabbitmq-data-claim"},
+							},
+						},
+					},
+				},
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels:alabels,
 			},
 		},
 	}
