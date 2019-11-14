@@ -7,6 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	storage1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -102,20 +103,114 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
+	// Define new Service object
+	service := newService(instance)
+	rabbitmqService := newRabbitmqService(instance)
 
-	// Set Rabbitmq instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	if err := controllerutil.SetControllerReference(instance, rabbitmqService, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this Service already exists
+	foundService := &corev1.Service{}
+	foundRS := &corev1.Service{}
+
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
+		reqLogger.Info("Creating a new Service", "Service.Namespace", service.Namespace, "Service.Name", service.Name)
+		err = r.client.Create(context.TODO(), service)
+		if err != nil {
+			reqLogger.Info("Creating Service fail", "Service.Namespace", service.Namespace, "Service.Name", service.Name)
+			return reconcile.Result{}, err
+		}
+
+		// Pod created successfully - don't requeue
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rabbitmqService.Name, Namespace: rabbitmqService.Namespace}, foundRS)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new RabbitmqService", "Service.Namespace", rabbitmqService.Namespace, "Service.Name", rabbitmqService.Name)
+		err = r.client.Create(context.TODO(), rabbitmqService)
+		if err != nil {
+			reqLogger.Info("Creating rabbitmqService fail", "Service.Namespace", rabbitmqService.Namespace, "Service.Name", rabbitmqService.Name)
+			return reconcile.Result{}, err
+		}
+
+		// Pod created successfully - don't requeue
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Define a new PV object
+	pv := newPV(instance)
+
+	// Set Rabbitmq instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, pv, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this PV already exists
+	foundPV := &corev1.PersistentVolume{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pv.Name, Namespace: pv.Namespace}, foundPV)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new pv", "pv.Namespace", pv.Namespace, "pv.Name", pv.Name)
+		err = r.client.Create(context.TODO(), pv)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Pod created successfully - don't requeue
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Define a new PV object
+	statefulset := newStatefulSet(instance)
+
+	// Set Rabbitmq instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, statefulset, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this PV already exists
+	foundSFS := &appsv1.StatefulSet{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}, foundSFS)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
+		err = r.client.Create(context.TODO(), statefulset)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Pod created successfully - don't requeue
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Define a new PV object
+	pvc := newPVC(instance)
+
+	// Set Rabbitmq instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this PV already exists
+	foundPVC := &corev1.PersistentVolumeClaim{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, foundPVC)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new pvc", "pvc.Namespace", pvc.Namespace, "pvc.Name", pvc.Name)
+		err = r.client.Create(context.TODO(), pvc)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -127,7 +222,7 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+	reqLogger.Info("Skip reconcile: statefulset already exists", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
 	return reconcile.Result{}, nil
 }
 
@@ -161,7 +256,7 @@ func newService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   "rabbitmq",
+			Name:   "rabbitmq-op",
 			Labels: map[string]string{"app": "rabbitmq"},
 		},
 		Spec: corev1.ServiceSpec{
@@ -184,7 +279,7 @@ func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq-service",
+			Name: "rabbitmq-service-op",
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -206,7 +301,7 @@ func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 	}
 }
 
-func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
+func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 
 	//set metadata -> label
 	var alabels map[string]string
@@ -241,7 +336,7 @@ func newSatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq",
+			Name: "rabbitmq-op",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "rabbitmq",
@@ -279,7 +374,7 @@ func newServiceAccount(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ServiceAccount {
 			Kind:       "ServiceAccount",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq",
+			Name: "rabbitmq-op",
 		},
 	}
 }
@@ -291,7 +386,7 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 			Kind:       "PersistentVolume",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq-data",
+			Name: "rabbitmq-data-op",
 			Labels: map[string]string{
 				"release": "rabbitmq-data",
 			},
@@ -307,7 +402,7 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				NFS: &corev1.NFSVolumeSource{
 					Server: "/home/k8s/nfs/data/pv001",
-					Path:   "127.0.0.1",
+					Path:   "10.90.101.73",
 				},
 			},
 		},
@@ -323,7 +418,7 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
 			Kind:       "PersistentVolumeClaim",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq-data-claim",
+			Name: "rabbitmq-data-claim-op",
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -339,5 +434,20 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
 				MatchLabels: map[string]string{"release": "rabbitmq-data"},
 			},
 		},
+	}
+}
+
+func newStorageClass(cr *rabbitmqv1alpha1.Rabbitmq) *storage1.StorageClass {
+
+	return &storage1.StorageClass{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "StorageClass",
+			APIVersion: "storage.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "managed-nfs-storage",
+		},
+		Provisioner: "fuseim.pri/ifs",
+		Parameters:  map[string]string{"archiveOnDelete": "false"},
 	}
 }
