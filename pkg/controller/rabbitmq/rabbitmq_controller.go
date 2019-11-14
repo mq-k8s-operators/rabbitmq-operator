@@ -7,6 +7,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbac1 "k8s.io/api/rbac/v1"
 	storage1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -316,12 +317,20 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 	container.Image = cr.Spec.Image
 	container.ImagePullPolicy = corev1.PullIfNotPresent
 	limits := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU:    resource.Quantity{nil, nil, "256", resource.BinarySI},
-		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
+		corev1.ResourceCPU: resource.Quantity{
+			Format: "256Mi",
+		},
+		corev1.ResourceMemory: resource.Quantity{
+			Format: "150M",
+		},
 	}
 	requests := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU:    resource.Quantity{nil, nil, "512", resource.BinarySI},
-		corev1.ResourceMemory: resource.Quantity{nil, nil, "150", resource.DecimalSI},
+		corev1.ResourceCPU: resource.Quantity{
+			Format: "512Mi",
+		},
+		corev1.ResourceMemory: resource.Quantity{
+			Format: "150M",
+		},
 	}
 	container.Resources.Limits = limits
 	container.Resources.Requests = requests
@@ -393,7 +402,9 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 		},
 		Spec: corev1.PersistentVolumeSpec{
 			Capacity: map[corev1.ResourceName]resource.Quantity{
-				corev1.ResourceStorage: resource.Quantity{nil, nil, "2", "Gi"},
+				corev1.ResourceStorage: resource.Quantity{
+					Format: "2Gi",
+				},
 			},
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteMany,
@@ -402,7 +413,7 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				NFS: &corev1.NFSVolumeSource{
 					Server: "/home/k8s/nfs/data/pv001",
-					Path:   "10.90.101.73",
+					Path:   "127.0.0.1",
 				},
 			},
 		},
@@ -427,7 +438,9 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
 			StorageClassName: &scn,
 			Resources: corev1.ResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceStorage: resource.Quantity{nil, nil, "2", "Gi"},
+					corev1.ResourceStorage: resource.Quantity{
+						Format: "2Gi",
+					},
 				},
 			},
 			Selector: &metav1.LabelSelector{
@@ -449,5 +462,47 @@ func newStorageClass(cr *rabbitmqv1alpha1.Rabbitmq) *storage1.StorageClass {
 		},
 		Provisioner: "fuseim.pri/ifs",
 		Parameters:  map[string]string{"archiveOnDelete": "false"},
+	}
+}
+
+func newRole(cr *rabbitmqv1alpha1.Rabbitmq) *rbac1.Role {
+	return &rbac1.Role{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Role",
+			APIVersion: "rbac.authorization.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "endpoint-reader",
+		},
+		Rules: []rbac1.PolicyRule{
+			rbac1.PolicyRule{
+				Verbs:     []string{"get"},
+				APIGroups: []string{""},
+				Resources: []string{"endpoints"},
+			},
+		},
+	}
+}
+
+func newRoleBing(cr *rabbitmqv1alpha1.Rabbitmq) *rbac1.RoleBinding {
+	return &rbac1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleBinding",
+			APIVersion: "rbac.authorization.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "endpoint-reader",
+		},
+		Subjects: []rbac1.Subject{
+			rbac1.Subject{
+				Kind: "ServiceAccount",
+				Name: "rabbitmq",
+			},
+		},
+		RoleRef: rbac1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     "endpoint-reader",
+		},
 	}
 }
