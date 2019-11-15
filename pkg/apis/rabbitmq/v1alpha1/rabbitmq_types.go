@@ -1,8 +1,8 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -14,9 +14,10 @@ type RabbitmqSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Size    int32            `json:"size"`
-	Image   string          `json:"image,omitempty"`
-	Envs    []corev1.EnvVar `json:"envs,omitempty"`
+	Size      int32           `json:"size"`
+	Image     string          `json:"image,omitempty"`
+	NameSpace string          `json:"namespace,omitempty"`
+	Envs      []corev1.EnvVar `json:"envs,omitempty"`
 }
 
 // RabbitmqStatus defines the observed state of Rabbitmq

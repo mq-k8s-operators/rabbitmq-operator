@@ -22,7 +22,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
-              value: rabbitmq
+              value: default
             - name: POD_NAME
               valueFrom:
                 fieldRef:
