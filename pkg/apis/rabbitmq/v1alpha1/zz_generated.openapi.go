@@ -81,6 +81,12 @@ func schema_pkg_apis_rabbitmq_v1alpha1_RabbitmqSpec(ref common.ReferenceCallback
 							Format: "",
 						},
 					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"envs": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -93,12 +99,31 @@ func schema_pkg_apis_rabbitmq_v1alpha1_RabbitmqSpec(ref common.ReferenceCallback
 							},
 						},
 					},
+					"storage": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+						},
+					},
+					"data": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"size"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 

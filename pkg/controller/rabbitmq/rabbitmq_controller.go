@@ -153,29 +153,29 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, err
 	}
 
-	//// Define a new PV object
-	//pv := newPV(instance)
-	//
-	//// Set Rabbitmq instance as the owner and controller
-	//if err := controllerutil.SetControllerReference(instance, pv, r.scheme); err != nil {
-	//	return reconcile.Result{}, err
-	//}
-	//
-	//// Check if this PV already exists
-	//foundPV := &corev1.PersistentVolume{}
-	//err = r.client.Get(context.TODO(), types.NamespacedName{Name: pv.Name, Namespace: pv.Namespace}, foundPV)
-	//if err != nil && errors.IsNotFound(err) {
-	//	reqLogger.Info("Creating a new pv", "pv.Namespace", pv.Namespace, "pv.Name", pv.Name)
-	//	err = r.client.Create(context.TODO(), pv)
-	//	if err != nil {
-	//		return reconcile.Result{}, err
-	//	}
-	//
-	//	// Pod created successfully - don't requeue
-	//	reqLogger.Info("Creating pv success", "pv.Namespace", pv.Namespace, "pv.Name", pv.Name)
-	//} else if err != nil {
-	//	return reconcile.Result{}, err
-	//}
+	//Define a new PV object
+	cm := newConfigMap(instance)
+
+	// Set Rabbitmq instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, cm, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this PV already exists
+	foundSA := &corev1.ServiceAccount{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, foundSA)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new configmap", "cm.Namespace", cm.Namespace, "cm.Name", cm.Name)
+		err = r.client.Create(context.TODO(), cm)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Pod created successfully - don't requeue
+		reqLogger.Info("Creating cm success", "cm.Namespace", cm.Namespace, "cm.Name", cm.Name)
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	// Define a new PV object
 	statefulset := newStatefulSet(instance)
@@ -286,6 +286,7 @@ func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rabbitmq-service-op",
 			Namespace: "default",
+			Labels:    map[string]string{"app": "rabbitmq", "type": "LoadBalancer"},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort,
@@ -339,10 +340,16 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 	}
 	container.Resources.Limits = limits
 	container.Resources.Requests = requests
-	container.VolumeMounts = []corev1.VolumeMount{corev1.VolumeMount{
-		Name:      "rabbitmq-data",
-		MountPath: "/var/lib/rabbitmq/mnesia",
-	}}
+	container.VolumeMounts = []corev1.VolumeMount{
+		corev1.VolumeMount{
+			Name:      "rabbitmq-data-a",
+			MountPath: "/var/lib/rabbitmq/mnesia",
+		},
+		corev1.VolumeMount{
+			Name:      "config",
+			MountPath: "/etc/rabbitmq",
+		},
+	}
 	container.Env = cr.Spec.Envs
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
@@ -361,15 +368,33 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 					Labels: alabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "rabbitmq",
+					ServiceAccountName: "rabbitmq-op",
 					ImagePullSecrets:   secrets,
 					Containers:         []corev1.Container{container},
 					Volumes: []corev1.Volume{
 						corev1.Volume{
-							Name: "rabbitmq-data",
+							Name: "rabbitmq-data-a",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "rabbitmq-data-claim"},
+									ClaimName: "rabbitmq-data-claim-op"},
+							},
+						},
+						corev1.Volume{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: "config"},
+									Items: []corev1.KeyToPath{
+										corev1.KeyToPath{
+											Key:  "rabbitmq.conf",
+											Path: "rabbitmq.conf",
+										},
+										corev1.KeyToPath{
+											Key:  "enabled_plugins",
+											Path: "enabled_plugins",
+										},
+									},
+								},
 							},
 						},
 					},
@@ -447,9 +472,7 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
 			StorageClassName: &scn,
 			Resources: corev1.ResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceStorage: resource.Quantity{
-						Format: "2Gi",
-					},
+					corev1.ResourceStorage: cr.Spec.Storage,
 				},
 			},
 			Selector: &metav1.LabelSelector{
@@ -515,5 +538,18 @@ func newRoleBing(cr *rabbitmqv1alpha1.Rabbitmq) *rbac1.RoleBinding {
 			Kind:     "Role",
 			Name:     "endpoint-reader",
 		},
+	}
+}
+
+func newConfigMap(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v2",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rabbitmq-config",
+		},
+		Data: cr.Spec.Data,
 	}
 }
