@@ -162,8 +162,8 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Check if this PV already exists
-	foundSA := &corev1.ServiceAccount{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, foundSA)
+	foundCM := &corev1.ConfigMap{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, foundCM)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new configmap", "cm.Namespace", cm.Namespace, "cm.Name", cm.Name)
 		err = r.client.Create(context.TODO(), cm)
@@ -383,7 +383,7 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: "config"},
+									LocalObjectReference: corev1.LocalObjectReference{Name: "rabbitmq-config"},
 									Items: []corev1.KeyToPath{
 										corev1.KeyToPath{
 											Key:  "rabbitmq.conf",
@@ -548,7 +548,8 @@ func newConfigMap(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ConfigMap {
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq-config",
+			Name:      "rabbitmq-config",
+			Namespace: "default",
 		},
 		Data: cr.Spec.Data,
 	}
