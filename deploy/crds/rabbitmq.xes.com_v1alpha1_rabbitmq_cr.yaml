@@ -5,39 +5,29 @@ metadata:
 spec:
   # Add fields here
   size: 3
-  image: rabbitmq:3.8.0-management
-  namespace: default
+  image: rabbitmq:3.8
+  storage: 2Gi
   envs:
-    - name: RABBITMQ_DEFAULT_USER
-      value: admin
-    - name: RABBITMQ_DEFAULT_PASS
-      value: admin
-    - name: RABBITMQ_ERLANG_COOKIE
-      value: aaaa
     - name: MY_POD_NAME
       valueFrom:
         fieldRef:
+          apiVersion: v1
           fieldPath: metadata.name
-    - name: K8S_SERVICE_NAME
-      value: "rabbitmq"
+    - name: MY_POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
     - name: RABBITMQ_USE_LONGNAME
       value: "true"
+    # See a note on cluster_formation.k8s.address_type in the config file section
+    - name: K8S_SERVICE_NAME
+      value: rabbitmq
     - name: RABBITMQ_NODENAME
-      value: "rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME)"
-    - name: RABBITMQ_NODE_TYPE
-      value: disc
-    - name: AUTOCLUSTER_TYPE
-      value: "k8s"
-    - name: AUTOCLUSTER_DELAY
-      value: "10"
-    - name: AUTOCLUSTER_CLEANUP
-      value: "true"
-    - name: CLEANUP_WARN_ONLY
-      value: "false"
-    - name: K8S_ADDRESS_TYPE
-      value: "hostname"
+      value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
     - name: K8S_HOSTNAME_SUFFIX
-      value: ".$(K8S_SERVICE_NAME)"
+      value: .$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
+    - name: RABBITMQ_ERLANG_COOKIE
+      value: "mycookie"
   data:
     enabled_plugins: |
       [rabbitmq_management,rabbitmq_peer_discovery_k8s].
@@ -67,4 +57,3 @@ spec:
       ## credentials instead.
       ## Learn more at https://www.rabbitmq.com/access-control.html#loopback-users
       loopback_users.guest = false
-

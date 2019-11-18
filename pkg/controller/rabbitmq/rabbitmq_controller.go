@@ -107,35 +107,35 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	namespace = "default"
 
 	// Define new Service object
-	service := newService(instance)
+	//service := newService(instance)
 	rabbitmqService := newRabbitmqService(instance)
 
-	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
+	//if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
+	//	return reconcile.Result{}, err
+	//}
 
 	if err := controllerutil.SetControllerReference(instance, rabbitmqService, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Check if this Service already exists
-	foundService := &corev1.Service{}
+	//foundService := &corev1.Service{}
 	foundRS := &corev1.Service{}
 
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: namespace}, foundService)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Service", "Service.Namespace", service.Namespace, "Service.Name", namespace)
-		err = r.client.Create(context.TODO(), service)
-		if err != nil {
-			reqLogger.Info("Creating Service fail", "Service.Namespace", service.Namespace, "Service.Name", namespace+":aaa:"+err.Error())
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		reqLogger.Info("Creating Service success", "Service.Namespace", service.Namespace, "Service.Name", namespace)
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
+	//err = r.client.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: namespace}, foundService)
+	//if err != nil && errors.IsNotFound(err) {
+	//	reqLogger.Info("Creating a new Service", "Service.Namespace", service.Namespace, "Service.Name", namespace)
+	//	err = r.client.Create(context.TODO(), service)
+	//	if err != nil {
+	//		reqLogger.Info("Creating Service fail", "Service.Namespace", service.Namespace, "Service.Name", namespace+":aaa:"+err.Error())
+	//		return reconcile.Result{}, err
+	//	}
+	//
+	//	// Pod created successfully - don't requeue
+	//	reqLogger.Info("Creating Service success", "Service.Namespace", service.Namespace, "Service.Name", namespace)
+	//} else if err != nil {
+	//	return reconcile.Result{}, err
+	//}
 
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rabbitmqService.Name, Namespace: namespace}, foundRS)
 	if err != nil && errors.IsNotFound(err) {
@@ -186,6 +186,7 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 
 	// Check if this PV already exists
 	foundSFS := &appsv1.StatefulSet{}
+	reqLogger.Info("test1")
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}, foundSFS)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
@@ -198,7 +199,13 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 		reqLogger.Info("Creating statefulset success", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
 	} else if err != nil {
 		return reconcile.Result{}, err
+	} else {
+
+		reqLogger.Info("Updating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
+
+		err = r.client.Update(context.TODO(), statefulset)
 	}
+	reqLogger.Info("test2")
 
 	// Define a new PV object
 	pvc := newPVC(instance)
@@ -259,7 +266,7 @@ func newService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-op",
+			Name:      "rabbitmq",
 			Labels:    map[string]string{"app": "rabbitmq"},
 			Namespace: "default",
 		},
@@ -283,7 +290,7 @@ func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-service-op",
+			Name:      "rabbitmq",
 			Namespace: "default",
 			Labels:    map[string]string{"app": "rabbitmq", "type": "LoadBalancer"},
 		},
@@ -313,37 +320,37 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 	//set metadata -> label
 	alabels := map[string]string{"app": "rabbitmq"}
 	//set ImagePullSecret
-	var name corev1.LocalObjectReference
-	name.Name = "regsecret"
-	secrets := []corev1.LocalObjectReference{name}
+	//var name corev1.LocalObjectReference
+	//name.Name = "regsecret"
+	//secrets := []corev1.LocalObjectReference{name}
 	//set container
 	var container corev1.Container
 	container.Name = "rabbitmq"
 	container.Image = cr.Spec.Image
 	container.ImagePullPolicy = corev1.PullIfNotPresent
-	limits := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU: resource.Quantity{
-			Format: "256Mi",
-		},
-		corev1.ResourceMemory: resource.Quantity{
-			Format: "150M",
-		},
-	}
-	requests := map[corev1.ResourceName]resource.Quantity{
-		corev1.ResourceCPU: resource.Quantity{
-			Format: "512Mi",
-		},
-		corev1.ResourceMemory: resource.Quantity{
-			Format: "150M",
-		},
-	}
-	container.Resources.Limits = limits
-	container.Resources.Requests = requests
+	//limits := map[corev1.ResourceName]resource.Quantity{
+	//	corev1.ResourceCPU: resource.Quantity{
+	//		Format: "256Mi",
+	//	},
+	//	corev1.ResourceMemory: resource.Quantity{
+	//		Format: "150M",
+	//	},
+	//}
+	//requests := map[corev1.ResourceName]resource.Quantity{
+	//	corev1.ResourceCPU: resource.Quantity{
+	//		Format: "512Mi",
+	//	},
+	//	corev1.ResourceMemory: resource.Quantity{
+	//		Format: "150M",
+	//	},
+	//}
+	//container.Resources.Limits = limits
+	//container.Resources.Requests = requests
 	container.VolumeMounts = []corev1.VolumeMount{
-		corev1.VolumeMount{
-			Name:      "rabbitmq-data-a",
-			MountPath: "/var/lib/rabbitmq/mnesia",
-		},
+		//corev1.VolumeMount{
+		//	Name:      "rabbitmq-data",
+		//	MountPath: "/var/lib/rabbitmq/mnesia",
+		//},
 		corev1.VolumeMount{
 			Name:      "config",
 			MountPath: "/etc/rabbitmq",
@@ -390,7 +397,7 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-op",
+			Name:      "rabbitmq",
 			Namespace: "default",
 		},
 		Spec: appsv1.StatefulSetSpec{
@@ -401,19 +408,18 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 					Labels: alabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:            "rabbitmq-op",
+					ServiceAccountName:            "rabbitmq-operator",
 					TerminationGracePeriodSeconds: &te,
 					NodeSelector:                  map[string]string{"kubernetes.io/os": "linux"},
-					ImagePullSecrets:              secrets,
 					Containers:                    []corev1.Container{container},
 					Volumes: []corev1.Volume{
-						corev1.Volume{
-							Name: "rabbitmq-data-a",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "rabbitmq-data-claim-op"},
-							},
-						},
+						//corev1.Volume{
+						//	Name: "rabbitmq-data",
+						//	VolumeSource: corev1.VolumeSource{
+						//		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						//			ClaimName: "rabbitmq-data-claim"},
+						//	},
+						//},
 						corev1.Volume{
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
@@ -449,7 +455,7 @@ func newServiceAccount(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ServiceAccount {
 			Kind:       "ServiceAccount",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-op",
+			Name:      "rabbitmq",
 			Namespace: "default",
 		},
 	}
@@ -462,7 +468,7 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 			Kind:       "PersistentVolume",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rabbitmq-data-op",
+			Name: "rabbitmq-data",
 			Labels: map[string]string{
 				"release": "rabbitmq-data",
 			},
@@ -497,7 +503,7 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
 			Kind:       "PersistentVolumeClaim",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-data-claim-op",
+			Name:      "rabbitmq-data-claim",
 			Namespace: "default",
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -579,7 +585,7 @@ func newRoleBing(cr *rabbitmqv1alpha1.Rabbitmq) *rbac1.RoleBinding {
 func newConfigMap(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v2",
+			APIVersion: "v1",
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
