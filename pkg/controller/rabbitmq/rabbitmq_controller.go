@@ -2,17 +2,16 @@ package rabbitmq
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/api/resource"
-	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbac1 "k8s.io/api/rbac/v1"
 	storage1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -351,6 +350,40 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 		},
 	}
 	container.Env = cr.Spec.Envs
+	container.Ports = []corev1.ContainerPort{
+		corev1.ContainerPort{
+			Name:          "http",
+			ContainerPort: 15672,
+			Protocol:      "TCP",
+		},
+		corev1.ContainerPort{
+			Name:          "amqp",
+			ContainerPort: 5672,
+			Protocol:      "TCP",
+		},
+	}
+	container.LivenessProbe = &corev1.Probe{
+		Handler: corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"rabbitmq-diagnostics", "status"},
+			},
+		},
+		InitialDelaySeconds: 60,
+		TimeoutSeconds:      15,
+		PeriodSeconds:       60,
+	}
+	container.ReadinessProbe = &corev1.Probe{
+		Handler: corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"rabbitmq-diagnostics", "status"},
+			},
+		},
+		InitialDelaySeconds: 20,
+		TimeoutSeconds:      10,
+		PeriodSeconds:       60,
+	}
+	var te int64
+	te = 10
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -368,9 +401,11 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 					Labels: alabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "rabbitmq-op",
-					ImagePullSecrets:   secrets,
-					Containers:         []corev1.Container{container},
+					ServiceAccountName:            "rabbitmq-op",
+					TerminationGracePeriodSeconds: &te,
+					NodeSelector:                  map[string]string{"kubernetes.io/os": "linux"},
+					ImagePullSecrets:              secrets,
+					Containers:                    []corev1.Container{container},
 					Volumes: []corev1.Volume{
 						corev1.Volume{
 							Name: "rabbitmq-data-a",
