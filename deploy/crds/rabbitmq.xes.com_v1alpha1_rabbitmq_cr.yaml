@@ -1,4 +1,4 @@
-apiVersion: rabbitmq.xes.com/v1alpha1
+apiVersion: rabbitmq.cloud.com/v1alpha1
 kind: Rabbitmq
 metadata:
   name: example-rabbitmq

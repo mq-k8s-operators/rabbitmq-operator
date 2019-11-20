@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: rabbitmqs.rabbitmq.xes.com
+  name: rabbitmqs.rabbitmq.cloud.com
 spec:
-  group: rabbitmq.xes.com
+  group: rabbitmq.cloud.com
   names:
     kind: Rabbitmq
     listKind: RabbitmqList

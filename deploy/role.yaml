@@ -55,7 +55,7 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - rabbitmq.xes.com
+  - rabbitmq.cloud.com
   resources:
   - '*'
   verbs:
