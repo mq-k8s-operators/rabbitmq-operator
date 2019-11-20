@@ -15,12 +15,16 @@ type RabbitmqSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Size      int32             `json:"size"`
-	Image     string            `json:"image,omitempty"`
-	NameSpace string            `json:"namespace,omitempty"`
-	Envs      []corev1.EnvVar   `json:"envs,omitempty"`
-	Storage   resource.Quantity `json:"storage,omitempty"`
-	Data      map[string]string `json:"data,omitempty"`
+	Size               int32             `json:"size"`
+	Image              string            `json:"image,omitempty"`
+	NameSpace          string            `json:"namespace,omitempty"`
+	Envs               []corev1.EnvVar   `json:"envs,omitempty"`
+	Storage            resource.Quantity `json:"storage,omitempty"`
+	Data               map[string]string `json:"data,omitempty"`
+	Name               string            `json:"name,omitempty"`
+	ServiceAccountName string            `json:"serviceAcoountName,omitempty"`
+	StorageClassName   string            `json:"storageClassName,omitempty"`
+	PvLable            map[string]string `json:"pvLabel,omitempty"`
 }
 
 // RabbitmqStatus defines the observed state of Rabbitmq

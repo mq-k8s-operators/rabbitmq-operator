@@ -15,51 +15,50 @@ func newConfigMap(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ConfigMap {
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-config",
-			Namespace: "default",
+			Name:      cr.Spec.Name + "rabbitmq-config",
+			Namespace: cr.Spec.NameSpace,
 		},
 		Data: cr.Spec.Data,
 	}
 }
 
 func newPVC(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolumeClaim {
-	var scn string
-	scn = "managed-nfs-storage"
-	return &corev1.PersistentVolumeClaim{
+	pvc := &corev1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "PersistentVolumeClaim",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq-data-claim",
-			Namespace: "default",
+			Name:      cr.Spec.Name + "rabbitmq-data-claim",
+			Namespace: cr.Spec.NameSpace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteMany,
 			},
-			StorageClassName: &scn,
+			StorageClassName: &cr.Spec.StorageClassName,
 			Resources: corev1.ResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
 					corev1.ResourceStorage: cr.Spec.Storage,
 				},
 			},
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"release": "rabbitmq-data"},
-			},
 		},
 	}
+	if cr.Spec.PvLable != nil || len(cr.Spec.PvLable) > 0 {
+		pvc.Spec.Selector.MatchLabels = cr.Spec.PvLable
+	}
+	return pvc
 }
 
 func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
-			Kind:       "Service",
+			Kind:       cr.Spec.Name + "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq",
-			Namespace: "default",
+			Name:      cr.Spec.Name + "rabbitmq",
+			Namespace: cr.Spec.NameSpace,
 			Labels:    map[string]string{"app": "rabbitmq", "type": "LoadBalancer"},
 		},
 		Spec: corev1.ServiceSpec{
@@ -67,15 +66,13 @@ func newRabbitmqService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
 					Port:     15672,
-					Name:     "test1",
+					Name:     "http",
 					Protocol: corev1.ProtocolTCP,
-					NodePort: 32001,
 				},
 				corev1.ServicePort{
 					Port:     5672,
-					Name:     "test2",
+					Name:     "amqp",
 					Protocol: corev1.ProtocolTCP,
-					NodePort: 32002,
 				},
 			},
 			Selector: map[string]string{"app": "rabbitmq"},
@@ -93,9 +90,10 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 	//secrets := []corev1.LocalObjectReference{name}
 	//set container
 	var container corev1.Container
-	container.Name = "rabbitmq"
+	container.Name = cr.Spec.Name + "rabbitmq"
 	container.Image = cr.Spec.Image
 	container.ImagePullPolicy = corev1.PullIfNotPresent
+	//可以设置内存和cpu
 	//limits := map[corev1.ResourceName]resource.Quantity{
 	//	corev1.ResourceCPU: resource.Quantity{
 	//		Format: "256Mi",
@@ -169,14 +167,14 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 			Namespace: "default",
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: "rabbitmq",
+			ServiceName: cr.Spec.Name + "rabbitmq",
 			Replicas:    &cr.Spec.Size,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: alabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName:            "rabbitmq-operator",
+					ServiceAccountName:            cr.Spec.ServiceAccountName,
 					TerminationGracePeriodSeconds: &te,
 					NodeSelector:                  map[string]string{"kubernetes.io/os": "linux"},
 					Containers:                    []corev1.Container{container},
@@ -192,7 +190,7 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: "rabbitmq-config"},
+									LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.Name + "rabbitmq-config"},
 									Items: []corev1.KeyToPath{
 										corev1.KeyToPath{
 											Key:  "rabbitmq.conf",

@@ -2,11 +2,14 @@ package rabbitmq
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	rbac1 "k8s.io/api/rbac/v1"
+	storage1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
 )
 
+//根据需求选择是否需要设置
 func newService(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -70,7 +73,7 @@ func newPV(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.PersistentVolume {
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				NFS: &corev1.NFSVolumeSource{
 					Server: "/home/k8s/nfs/data/pv001",
-					Path:   "10.90.101.73",
+					Path:   "127.0.0.1",
 				},
 			},
 		},
