@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "../../rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
-	"../../rabbitmq-operator/pkg/clients/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
+	v1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
+	"rabbitmq-operator/pkg/clients/clientset/versioned/scheme"
 )
 
 type RabbitmqV1alpha1Interface interface {

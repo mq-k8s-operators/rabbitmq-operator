@@ -163,7 +163,7 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq) *appsv1.StatefulSet {
 			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rabbitmq",
+			Name:      cr.Spec.Name + "rabbitmq",
 			Namespace: "default",
 		},
 		Spec: appsv1.StatefulSetSpec{

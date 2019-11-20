@@ -21,15 +21,19 @@ package versioned
 import (
 	"fmt"
 
-	rabbitmqv1alpha1 "../../rabbitmq-operator/pkg/clients/clientset/versioned/typed/rabbitmq/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
+	appv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
+	rabbitmqv1alpha1 "rabbitmq-operator/pkg/clients/clientset/versioned/typed/rabbitmq/v1alpha1"
 )
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	RabbitmqV1alpha1() rabbitmqv1alpha1.RabbitmqV1alpha1Interface
+	CoreV1() corev1.CoreV1Interface
+	Appv1() appv1.AppsV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -37,6 +41,8 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	rabbitmqV1alpha1 *rabbitmqv1alpha1.RabbitmqV1alpha1Client
+	coreV1           *corev1.CoreV1Client
+	appV1            *appv1.AppsV1Client
 }
 
 // RabbitmqV1alpha1 retrieves the RabbitmqV1alpha1Client
@@ -50,6 +56,20 @@ func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 		return nil
 	}
 	return c.DiscoveryClient
+}
+
+func (c *Clientset) CoreV1() corev1.CoreV1Interface {
+	if c == nil {
+		return nil
+	}
+	return c.coreV1
+}
+
+func (c *Clientset) AppV1() appv1.AppsV1Interface {
+	if c == nil {
+		return nil
+	}
+	return c.appV1
 }
 
 // NewForConfig creates a new Clientset for the given config.
@@ -71,6 +91,11 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
+
+	cs.coreV1, err = corev1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}

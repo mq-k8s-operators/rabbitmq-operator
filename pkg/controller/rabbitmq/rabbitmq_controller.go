@@ -8,7 +8,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	rabbitmqv1alpha1 "rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
+	"rabbitmq-operator/pkg/clients/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -103,6 +105,20 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, err
 	}
 
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		reqLogger.Error(err, "find a config error:", err.Error())
+		return reconcile.Result{}, err
+	}
+
+	clientset, err := versioned.NewForConfig(config)
+	var statefulsetOld *appsv1.StatefulSet = &appsv1.StatefulSet{}
+	if err != nil {
+		reqLogger.Error(err, "find a clientset error:", err.Error())
+	} else {
+		statefulsetOld, err = clientset.AppV1().StatefulSets(instance.Spec.NameSpace).Get(instance.Spec.Name+"rabbitmq", metav1.GetOptions{})
+	}
+
 	var namespace string
 	namespace = "default"
 
@@ -180,9 +196,15 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{}, err
 	} else {
 
-		reqLogger.Info("Updating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
+		if statefulsetOld != nil && statefulsetOld.Spec.Replicas != statefulset.Spec.Replicas {
+			reqLogger.Info("Updating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
 
-		err = r.client.Update(context.TODO(), statefulset)
+			err = r.client.Update(context.TODO(), statefulset)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+
 	}
 
 	// Define a new PV object
@@ -214,6 +236,7 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	return reconcile.Result{}, nil
 }
 
+//使用工作队列相关
 func (r *ReconcileRabbitmq) Create() {
 	go func() {
 		for {
