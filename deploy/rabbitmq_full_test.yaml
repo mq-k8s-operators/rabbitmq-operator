@@ -1,40 +1,40 @@
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: rabbitmq
-  namespace: default
-# Required from EKS 1.13
-# https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#use-the-default-service-account-to-access-the-api-server
-automountServiceAccountToken: true
----
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: endpoint-reader
-  namespace: default
-rules:
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    verbs: ["get"]
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: endpoint-reader
-  namespace: default
-subjects:
-  - kind: ServiceAccount
-    name: rabbitmq
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: endpoint-reader
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: rabbit
+#   namespace: default
+# # Required from EKS 1.13
+# # https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#use-the-default-service-account-to-access-the-api-server
+# automountServiceAccountToken: true
+# ---
+# kind: Role
+# apiVersion: rbac.authorization.k8s.io/v1beta1
+# metadata:
+#   name: endpoint-reader
+#   namespace: default
+# rules:
+# - apiGroups: [""]
+#   resources: ["endpoints"]
+#   verbs: ["get"]
+# ---
+# kind: RoleBinding
+# apiVersion: rbac.authorization.k8s.io/v1beta1
+# metadata:
+#   name: endpoint-reader
+#   namespace: default
+# subjects:
+# - kind: ServiceAccount
+#   name: rabbit
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: endpoint-reader
 ---
 kind: Service
 apiVersion: v1
 metadata:
   namespace: default
-  name: rabbitmq
+  name: test-rabbit
   labels:
     app: rabbitmq
     type: LoadBalancer
@@ -44,20 +44,20 @@ spec:
     - name: http
       protocol: TCP
       port: 15672
-      #  targetPort: 15672
-      nodePort: 30001
+    #  targetPort: 15672
+    #  nodePort: 30001
     - name: amqp
       protocol: TCP
       port: 5672
-      #  targetPort: 5672
-      nodePort: 30002
+    #  targetPort: 5672
+    #  nodePort: 30002
   selector:
     app: rabbitmq
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: rabbitmq-config
+  name: test-rabbit-config
   namespace: default
 data:
   enabled_plugins: |
@@ -79,7 +79,7 @@ data:
     ## is desired. This can be dangerous, see
     ##  * https://www.rabbitmq.com/cluster-formation.html#node-health-checks-and-cleanup
     ##  * https://groups.google.com/forum/#!msg/rabbitmq-users/wuOfzEywHXo/k8z_HWIkBgAJ
-    cluster_formation.node_cleanup.only_log_warning = true
+    cluster_formation.node_cleanup.only_log_warning = false
     cluster_partition_handling = autoheal
     ## See https://www.rabbitmq.com/ha.html#master-migration-data-locality
     queue_master_locator=min-masters
@@ -89,16 +89,20 @@ data:
     ## credentials instead.
     ## Learn more at https://www.rabbitmq.com/access-control.html#loopback-users
     loopback_users.guest = false
+    default_pass = admin
+    default_user = admin
+    default_vhost = admin
+# 设置账号密码与vhost，未设置会自动使用guest/guest//，此时一些权限相关的东西创建不出来，可以设置在statefulset上，但是由于设置在上面会导致出现bug（/etc/rabbitmq/xxx为只读，不允许修改）,因此设置在rabbitmq.conf上，可以尝试修改到env
 
 ---
 apiVersion: apps/v1
 # See the Prerequisites section of https://www.rabbitmq.com/cluster-formation.html#peer-discovery-k8s.
 kind: StatefulSet
 metadata:
-  name: rabbitmq
+  name: test-rabbit
   namespace: default
 spec:
-  serviceName: rabbitmq
+  serviceName: test-rabbit
   # Three nodes is the recommended minimum. Some features may require a majority of nodes
   # to be available.
   replicas: 3
@@ -110,20 +114,22 @@ spec:
       labels:
         app: rabbitmq
     spec:
-      serviceAccountName: rabbitmq
+      serviceAccountName: rabbitmq-operator
       terminationGracePeriodSeconds: 10
       nodeSelector:
         # Use Linux nodes in a mixed OS kubernetes cluster.
         # Learn more at https://kubernetes.io/docs/reference/kubernetes-api/labels-annotations-taints/#kubernetes-io-os
         kubernetes.io/os: linux
       containers:
-        - name: rabbitmq-k8s
+        - name: test-rabbit
           image: rabbitmq:3.8
           volumeMounts:
             - name: config-volume
               mountPath: /etc/rabbitmq
-          # Learn more about what ports various protocols use
-          # at https://www.rabbitmq.com/networking.html#ports
+            # Learn more about what ports various protocols use
+            # at https://www.rabbitmq.com/networking.html#ports
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq/mnesia
           ports:
             - name: http
               protocol: TCP
@@ -158,7 +164,7 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 60
             timeoutSeconds: 10
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -173,7 +179,7 @@ spec:
               value: "true"
             # See a note on cluster_formation.k8s.address_type in the config file section
             - name: K8S_SERVICE_NAME
-              value: rabbitmq
+              value: test-rabbit
             - name: RABBITMQ_NODENAME
               value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
             - name: K8S_HOSTNAME_SUFFIX
@@ -181,11 +187,61 @@ spec:
             - name: RABBITMQ_ERLANG_COOKIE
               value: "mycookie"
       volumes:
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: rabbitmq-data-claim
         - name: config-volume
           configMap:
-            name: rabbitmq-config
+            name: test-rabbit-config
             items:
               - key: rabbitmq.conf
                 path: rabbitmq.conf
               - key: enabled_plugins
                 path: enabled_plugins
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: rabbitmq-data
+  labels:
+    release: rabbitmq-data
+spec:
+  capacity:
+    storage: 6Gi
+  accessModes:
+    - ReadWriteMany
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: managed-nfs-storage
+  local:
+    path: /mnt/disks/vol1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: tester
+              operator: In
+              values:
+                - test   #使用本节点的label，key/value， 可以自己设置
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-data-claim
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: managed-nfs-storage
+  resources:
+    requests:
+      storage: 2Gi
+  selector:
+    matchLabels:
+      release: rabbitmq-data
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-nfs-storage
+provisioner: kubernetes.io/no-provisioner # or choose another name, must match deployment's env PROVISIONER_NAME'
+volumeBindingMode: WaitForFirstConsumer

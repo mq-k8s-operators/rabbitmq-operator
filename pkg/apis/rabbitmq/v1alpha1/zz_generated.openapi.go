@@ -124,7 +124,7 @@ func schema_pkg_apis_rabbitmq_v1alpha1_RabbitmqSpec(ref common.ReferenceCallback
 							Format: "",
 						},
 					},
-					"serviceAcoountName": {
+					"serviceAccountName": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
 							Format: "",

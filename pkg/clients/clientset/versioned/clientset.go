@@ -99,6 +99,11 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	cs.appV1, err = appv1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	return &cs, nil
 }
 

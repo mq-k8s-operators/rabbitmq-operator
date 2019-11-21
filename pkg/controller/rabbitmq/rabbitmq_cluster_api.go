@@ -23,14 +23,14 @@ func newConfigMap(cr *rabbitmqv1alpha1.Rabbitmq) *corev1.ConfigMap {
 	}
 }
 
-func newPVC(cr *rabbitmqv1alpha1.Rabbitmq,  log logr.Logger) *corev1.PersistentVolumeClaim {
+func newPVC(cr *rabbitmqv1alpha1.Rabbitmq, log logr.Logger) *corev1.PersistentVolumeClaim {
 	pvc := &corev1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "PersistentVolumeClaim",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.Name + "data-claim",
+			Name:      cr.Spec.Name + "-data-claim",
 			Namespace: cr.Spec.NameSpace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -47,7 +47,10 @@ func newPVC(cr *rabbitmqv1alpha1.Rabbitmq,  log logr.Logger) *corev1.PersistentV
 	}
 
 	if cr.Spec.PvLable != nil || len(cr.Spec.PvLable) > 0 {
-		pvc.Spec.Selector.MatchLabels = cr.Spec.PvLable
+		pvc.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: cr.Spec.PvLable,
+		}
+
 	}
 	return pvc
 }
@@ -115,10 +118,10 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq, log logr.Logger) *appsv1.Stat
 	//container.Resources.Limits = limits
 	//container.Resources.Requests = requests
 	container.VolumeMounts = []corev1.VolumeMount{
-		//corev1.VolumeMount{
-		//	Name:      "rabbitmq-data",
-		//	MountPath: "/var/lib/rabbitmq/mnesia",
-		//},
+		corev1.VolumeMount{
+			Name:      "rabbitmq-data",
+			MountPath: "/var/lib/rabbitmq/mnesia",
+		},
 		corev1.VolumeMount{
 			Name:      "config",
 			MountPath: "/etc/rabbitmq",
@@ -181,13 +184,13 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq, log logr.Logger) *appsv1.Stat
 					NodeSelector:                  map[string]string{"kubernetes.io/os": "linux"},
 					Containers:                    []corev1.Container{container},
 					Volumes: []corev1.Volume{
-						//corev1.Volume{
-						//	Name: "rabbitmq-data",
-						//	VolumeSource: corev1.VolumeSource{
-						//		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						//			ClaimName: "rabbitmq-data-claim"},
-						//	},
-						//},
+						corev1.Volume{
+							Name: "rabbitmq-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: cr.Spec.Name + "-data-claim"},
+							},
+						},
 						corev1.Volume{
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{

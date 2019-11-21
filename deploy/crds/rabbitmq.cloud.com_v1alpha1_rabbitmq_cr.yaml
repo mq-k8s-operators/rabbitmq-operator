@@ -4,12 +4,13 @@ metadata:
   name: example-rabbitmq
 spec:
   # Add fields here
-  name: test-
+  name: test
   size: 3
   image: rabbitmq:3.8
   storage: 2Gi
-  storageClassName:
+  storageClassName: managed-nfs-storage
   serviceAccountName: rabbitmq-operator
+  namespace: default
   pvLabel: # 做筛选用，可以不填
     release: rabbitmq-data
   envs:
@@ -26,13 +27,13 @@ spec:
       value: "true"
     # See a note on cluster_formation.k8s.address_type in the config file section
     - name: K8S_SERVICE_NAME
-      value: test-rabbitmq  #service name 请使用name
+      value: test # 保持和name一致，否则会产生错误
     - name: RABBITMQ_NODENAME
       value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
     - name: K8S_HOSTNAME_SUFFIX
       value: .$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
     - name: RABBITMQ_ERLANG_COOKIE
-      value: "mycookie"
+      value: "newcookie"
   data:
     enabled_plugins: |
       [rabbitmq_management,rabbitmq_peer_discovery_k8s].
@@ -62,3 +63,6 @@ spec:
       ## credentials instead.
       ## Learn more at https://www.rabbitmq.com/access-control.html#loopback-users
       loopback_users.guest = false
+      default_pass = admin
+      default_user = admin
+      default_vhost = admin

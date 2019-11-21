@@ -22,7 +22,7 @@ type RabbitmqSpec struct {
 	Storage            resource.Quantity `json:"storage,omitempty"`
 	Data               map[string]string `json:"data,omitempty"`
 	Name               string            `json:"name,omitempty"`
-	ServiceAccountName string            `json:"serviceAcoountName,omitempty"`
+	ServiceAccountName string            `json:"serviceAccountName,omitempty"`
 	StorageClassName   string            `json:"storageClassName,omitempty"`
 	PvLable            map[string]string `json:"pvLabel,omitempty"`
 }
