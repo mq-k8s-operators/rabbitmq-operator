@@ -112,11 +112,10 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	clientset, err := versioned.NewForConfig(config)
-	var statefulsetOld *appsv1.StatefulSet = &appsv1.StatefulSet{}
+
 	if err != nil {
 		reqLogger.Error(err, "find a clientset error:", err.Error())
-	} else {
-		statefulsetOld, err = clientset.AppV1().StatefulSets(instance.Spec.NameSpace).Get(instance.Spec.Name+"rabbitmq", metav1.GetOptions{})
+		return reconcile.Result{}, err
 	}
 
 	var namespace string
@@ -173,7 +172,7 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Define a new PV object
-	statefulset := newStatefulSet(instance)
+	statefulset := newStatefulSet(instance, reqLogger)
 
 	// Set Rabbitmq instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, statefulset, r.scheme); err != nil {
@@ -195,7 +194,10 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	} else if err != nil {
 		return reconcile.Result{}, err
 	} else {
+		var statefulsetOld *appsv1.StatefulSet = &appsv1.StatefulSet{}
 
+		statefulsetOld, err = clientset.AppV1().StatefulSets(instance.Spec.NameSpace).Get(instance.Spec.Name+"rabbitmq", metav1.GetOptions{})
+		reqLogger.Info("test replicas:", "new ", statefulset.Spec.Replicas, "old", statefulsetOld.Spec.Replicas)
 		if statefulsetOld != nil && statefulsetOld.Spec.Replicas != statefulset.Spec.Replicas {
 			reqLogger.Info("Updating a new statefulset", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)
 
@@ -208,28 +210,28 @@ func (r *ReconcileRabbitmq) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	// Define a new PV object
-	pvc := newPVC(instance)
-
-	// Set Rabbitmq instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Check if this PV already exists
-	foundPVC := &corev1.PersistentVolumeClaim{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, foundPVC)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new pvc", "pvc.Namespace", pvc.Namespace, "pvc.Name", pvc.Name)
-		err = r.client.Create(context.TODO(), pvc)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		reqLogger.Info("Creating pvc success", "pvc.Namespace", pvc.Namespace, "pvc.Name", pvc.Name)
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
+	//pvc := newPVC(instance, reqLogger)
+	//
+	//// Set Rabbitmq instance as the owner and controller
+	//if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+	//	return reconcile.Result{}, err
+	//}
+	//
+	//// Check if this PV already exists
+	//foundPVC := &corev1.PersistentVolumeClaim{}
+	//err = r.client.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, foundPVC)
+	//if err != nil && errors.IsNotFound(err) {
+	//	reqLogger.Info("Creating a new pvc", "pvc.Namespace", pvc.Namespace, "pvc.Name", pvc.Name)
+	//	err = r.client.Create(context.TODO(), pvc)
+	//	if err != nil {
+	//		return reconcile.Result{}, err
+	//	}
+	//
+	//	// Pod created successfully - don't requeue
+	//	reqLogger.Info("Creating pvc success", "pvc.Namespace", pvc.Namespace, "pvc.Name", pvc.Name)
+	//} else if err != nil {
+	//	return reconcile.Result{}, err
+	//}
 
 	// Pod already exists - don't requeue
 	reqLogger.Info("Skip reconcile: statefulset already exists", "statefulset.Namespace", statefulset.Namespace, "statefulset.Name", statefulset.Name)

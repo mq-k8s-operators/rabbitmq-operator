@@ -88,6 +88,13 @@ func (in *RabbitmqSpec) DeepCopyInto(out *RabbitmqSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.PvLable != nil {
+		in, out := &in.PvLable, &out.PvLable
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

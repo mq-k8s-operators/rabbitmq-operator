@@ -4,7 +4,7 @@ metadata:
   name: example-rabbitmq
 spec:
   # Add fields here
-  name: test
+  name: test-
   size: 3
   image: rabbitmq:3.8
   storage: 2Gi
@@ -26,7 +26,7 @@ spec:
       value: "true"
     # See a note on cluster_formation.k8s.address_type in the config file section
     - name: K8S_SERVICE_NAME
-      value: rabbitmq
+      value: test-rabbitmq  #service name 请使用name + rabbitmq
     - name: RABBITMQ_NODENAME
       value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
     - name: K8S_HOSTNAME_SUFFIX
