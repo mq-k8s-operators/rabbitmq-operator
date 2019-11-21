@@ -92,7 +92,6 @@ data:
     default_pass = admin
     default_user = admin
     default_vhost = admin
-# 设置账号密码与vhost，未设置会自动使用guest/guest//，此时一些权限相关的东西创建不出来，可以设置在statefulset上，但是由于设置在上面会导致出现bug（/etc/rabbitmq/xxx为只读，不允许修改）,因此设置在rabbitmq.conf上，可以尝试修改到env
 
 ---
 apiVersion: apps/v1

@@ -4,7 +4,9 @@ metadata:
   name: example-rabbitmq
 spec:
   # Add fields here
-  name: test
+  name: test # 申请不同的集群切换名字
+  # 伸缩相关 bug  先缩小后在扩展会出现问题，因为设置的pv里面删除节点的数据库没有删除，所有在创建会导致启动不了，扩展和缩小需要根据负载迁移数据
+  # 在一个命名空间创建两个及以上的集群为出现问题与 rabbitmq_peer_discovery_k8s 相关
   size: 3
   image: rabbitmq:3.8
   storage: 2Gi
@@ -67,3 +69,4 @@ spec:
       default_pass = admin
       default_user = admin
       default_vhost = admin
+# 设置账号密码与vhost，未设置会自动使用guest/guest//，此时一些权限相关的东西创建不出来，可以设置在statefulset上，但是由于设置在上面会导致出现bug（/etc/rabbitmq/xxx为只读，不允许修改）,因此设置在rabbitmq.conf上，可以尝试修改到env
