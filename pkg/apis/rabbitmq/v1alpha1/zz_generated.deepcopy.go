@@ -95,6 +95,11 @@ func (in *RabbitmqSpec) DeepCopyInto(out *RabbitmqSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.Bash != nil {
+		in, out := &in.Bash, &out.Bash
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

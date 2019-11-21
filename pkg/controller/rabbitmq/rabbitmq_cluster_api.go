@@ -160,6 +160,9 @@ func newStatefulSet(cr *rabbitmqv1alpha1.Rabbitmq, log logr.Logger) *appsv1.Stat
 		TimeoutSeconds:      10,
 		PeriodSeconds:       60,
 	}
+	if cr.Spec.Bash != nil || len(cr.Spec.Bash) > 0 {
+		container.Command = cr.Spec.Bash
+	}
 	var te int64
 	te = 10
 	return &appsv1.StatefulSet{

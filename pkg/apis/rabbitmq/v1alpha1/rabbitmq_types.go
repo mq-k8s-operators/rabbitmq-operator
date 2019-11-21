@@ -25,6 +25,7 @@ type RabbitmqSpec struct {
 	ServiceAccountName string            `json:"serviceAccountName,omitempty"`
 	StorageClassName   string            `json:"storageClassName,omitempty"`
 	PvLable            map[string]string `json:"pvLabel,omitempty"`
+	Bash               []string          `json:"bash,omitempty"`
 }
 
 // RabbitmqStatus defines the observed state of Rabbitmq

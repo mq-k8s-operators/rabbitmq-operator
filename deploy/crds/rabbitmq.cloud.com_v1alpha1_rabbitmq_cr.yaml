@@ -11,6 +11,7 @@ spec:
   storageClassName: managed-nfs-storage
   serviceAccountName: rabbitmq-operator
   namespace: default
+  Bash: #数组。准备列为设置ha策略
   pvLabel: # 做筛选用，可以不填
     release: rabbitmq-data
   envs:
