@@ -55,8 +55,14 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - rabbitmq.cloud.com
+  - lesolise.github.io
   resources:
   - '*'
   verbs:
   - '*'
+- apiGroups:
+    - extensions
+  resources:
+    - '*'
+  verbs:
+    - '*'

@@ -1,11 +1,11 @@
-module rabbitmq-operator
+module github.com/lesolise/rabbitmq-operator
 
 go 1.13
 
 require (
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.0
-	github.com/operator-framework/operator-sdk v0.12.1-0.20191112211508-82fc57de5e5b
+	github.com/operator-framework/operator-sdk v0.12.0
 	github.com/spf13/pflag v1.0.3
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0

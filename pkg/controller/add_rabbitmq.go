@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"rabbitmq-operator/pkg/controller/rabbitmq"
+	"github.com/lesolise/rabbitmq-operator/pkg/controller/rabbitmq"
 )
 
 func init() {
