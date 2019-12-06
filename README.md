@@ -18,4 +18,5 @@ RabbitMQ Operator 构建于 [Operator framework](https://github.com/operator-fra
  # Others
  
  https://www.rabbitmq.com/cluster-formation.html#peer-discovery-k8s
+ 
  https://github.com/rabbitmq/rabbitmq-peer-discovery-k8s
