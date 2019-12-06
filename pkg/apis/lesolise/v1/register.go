@@ -1,9 +1,9 @@
 // NOTE: Boilerplate only.  Ignore this file.
 
-// Package v1alpha1 contains API Schema definitions for the rabbitmq v1alpha1 API group
+// Package v1 contains API Schema definitions for the lesolise v1 API group
 // +k8s:deepcopy-gen=package,register
-// +groupName=rabbitmq.cloud.com
-package v1alpha1
+// +groupName=lesolise.github.io
+package v1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -12,10 +12,8 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "rabbitmq.cloud.com", Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "lesolise.github.io", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
-
-	AddToScheme = SchemeBuilder.AddToScheme
 )

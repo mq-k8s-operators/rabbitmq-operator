@@ -1,10 +1,10 @@
 package apis
 
 import (
-	"rabbitmq-operator/pkg/apis/rabbitmq/v1alpha1"
+	v1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 )
 
 func init() {
 	// Register the types with the Scheme so the components can map objects to GroupVersionKinds and back
-	AddToSchemes = append(AddToSchemes, v1alpha1.SchemeBuilder.AddToScheme)
+	AddToSchemes = append(AddToSchemes, v1.SchemeBuilder.AddToScheme)
 }
