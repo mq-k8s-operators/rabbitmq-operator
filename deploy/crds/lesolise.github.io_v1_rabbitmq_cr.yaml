@@ -4,4 +4,14 @@ metadata:
   name: example-rabbitmq
 spec:
   # Add fields here
+  username: user
+  image: rabbitmq:3.8
   size: 3
+  disk_limit: 500Gi
+  disk_request: 1Gi
+  memory_request: 16Gi
+  memory_limit: 1Gi
+  cpu_limit: 2000m
+  cpu_request: 500m
+  storage_class_name: standard
+  rabbitmq_manager_host: '.rmq.cloudmq.com'
