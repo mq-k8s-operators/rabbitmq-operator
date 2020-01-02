@@ -34,6 +34,13 @@ type RabbitMQSpec struct {
 	// then you can bind hosts test.rmq.com to access it
 	// default value is .rmq.com
 	ManagerHost string `json:"rabbitmq_manager_host,omitempty"`
+	// for proxy
+	ProxyDiskLimit     string `json:"proxy_disk_limit,omitempty"`
+	ProxyDiskRequest   string `json:"proxy_disk_request,omitempty"`
+	ProxyMemoryRequest string `json:"proxy_memory_request,omitempty"`
+	ProxyMemoryLimit   string `json:"proxy_memory_limit,omitempty"`
+	ProxyCpuLimit      string `json:"proxy_cpu_limit,omitempty"`
+	ProxyCpuRequest    string `json:"proxy_cpu_request,omitempty"`
 }
 
 // RabbitMQStatus defines the observed state of RabbitMQ

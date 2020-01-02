@@ -2,7 +2,7 @@ package utils
 
 import v1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 
-func CheckCR(cr * v1.RabbitMQ) bool{
+func CheckCR(cr *v1.RabbitMQ) bool {
 	var changed bool
 	changed = false
 
@@ -43,6 +43,36 @@ func CheckCR(cr * v1.RabbitMQ) bool{
 
 	if cr.Spec.CpuRequest == "" {
 		cr.Spec.CpuRequest = "500m"
+		changed = true
+	}
+
+	if cr.Spec.ProxyDiskLimit == "" {
+		cr.Spec.ProxyDiskLimit = "10Gi"
+		changed = true
+	}
+
+	if cr.Spec.ProxyDiskRequest == "" {
+		cr.Spec.ProxyDiskRequest = "1Gi"
+		changed = true
+	}
+
+	if cr.Spec.ProxyMemoryLimit == "" {
+		cr.Spec.ProxyMemoryLimit = "2Gi"
+		changed = true
+	}
+
+	if cr.Spec.ProxyMemoryRequest == "" {
+		cr.Spec.ProxyMemoryRequest = "1Gi"
+		changed = true
+	}
+
+	if cr.Spec.ProxyCpuLimit == "" {
+		cr.Spec.ProxyCpuLimit = "2000m"
+		changed = true
+	}
+
+	if cr.Spec.ProxyCpuRequest == "" {
+		cr.Spec.ProxyCpuRequest = "500m"
 		changed = true
 	}
 

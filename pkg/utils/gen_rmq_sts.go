@@ -3,12 +3,12 @@ package utils
 import (
 	v1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet{
+func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
 	svcName := "rmq-svc-" + cr.Name
 	accessModes := make([]corev1.PersistentVolumeAccessMode, 0)
 	accessModes = append(accessModes, corev1.ReadWriteOnce)
@@ -86,9 +86,9 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet{
 
 	vms := make([]corev1.VolumeMount, 0)
 	vms = append(vms, corev1.VolumeMount{
-			Name:      "rmq-data",
-			MountPath: "/var/lib/rabbitmq/mnesia",
-		},
+		Name:      "rmq-data",
+		MountPath: "/var/lib/rabbitmq/mnesia",
+	},
 		corev1.VolumeMount{
 			Name:      "rmq-config",
 			MountPath: "/etc/rabbitmq",
@@ -130,7 +130,7 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet{
 			},
 			Requests: corev1.ResourceList{
 				corev1.ResourceMemory: resource.MustParse(cr.Spec.MemoryRequest),
-				corev1.ResourceCPU:    resource.MustParse(cr.Spec.CpuLimit),
+				corev1.ResourceCPU:    resource.MustParse(cr.Spec.CpuRequest),
 			},
 		},
 	}
@@ -146,7 +146,7 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet{
 			Namespace: cr.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: &cr.Spec.Size,
+			Replicas:    &cr.Spec.Size,
 			ServiceName: svcName,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"app": "rmq-node-" + cr.Name},
@@ -161,7 +161,7 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet{
 					// we must specify the service account name for pod
 					// see: https://github.com/rabbitmq/rabbitmq-peer-discovery-k8s/pull/16/commits/e0222510e5f69b98c21b92fa14db7ee57887daf6
 					ServiceAccountName: "rabbitmq-operator",
-					Containers: containers,
+					Containers:         containers,
 					// for config files generate from config map
 					Volumes: []corev1.Volume{
 						corev1.Volume{

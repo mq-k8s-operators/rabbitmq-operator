@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	lesolisev1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1beta12 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -81,7 +82,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-
 	err = c.Watch(&source.Kind{Type: &v1beta12.Ingress{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &lesolisev1.RabbitMQ{},
@@ -149,6 +149,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 		r.reconcileRabbitMQ,
 		r.reconcileRabbitMQManager,
 		r.reconcileClusterStatus,
+		r.reconcileRabbitMQProxy,
 	} {
 		if err = fun(instance); err != nil {
 			return reconcile.Result{}, err
@@ -268,6 +269,46 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		}
 	} else if err != nil {
 		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+	}
+
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ) error {
+	//check
+	dep := utils.NewProxyForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
+		return fmt.Errorf("SET proxy Owner fail : %s", err)
+	}
+	found := &appsv1.Deployment{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, found)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new Proxy", "Namespace", dep.Namespace, "Name", dep.Name)
+		err = r.client.Create(context.TODO(), dep)
+		if err != nil {
+			return fmt.Errorf("Create proxy fail : %s", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("GET proxy fail : %s", err)
+	}
+
+	//check svc
+	svc := utils.NewMqpSvcForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
+		return fmt.Errorf("SET mqp svc Owner fail : %s", err)
+	}
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, foundSvc)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating proxy svc", "Namespace", svc.Namespace, "Name", svc.Name)
+		err = r.client.Create(context.TODO(), svc)
+		if err != nil {
+			return fmt.Errorf("Create proxy svc fail : %s", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("GET proxy svc fail : %s", err)
 	}
 
 	return nil
