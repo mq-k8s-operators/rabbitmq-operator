@@ -4,8 +4,8 @@ import (
 	v1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 	"math/rand"
+	"time"
 )
 
 func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
@@ -13,6 +13,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 	if cr.Status.RabbitmqManagerPassword == "" {
 		cr.Status.RabbitmqManagerPassword = password
 	}
+	cr.Status.RabbitmqManagerUsername = "rmq_admin"
 
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -26,8 +27,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 		//TODO rabbitmq_delayed_message_exchange this need a init container
 		Data: map[string]string{
 			"enabled_plugins": "[rabbitmq_management,rabbitmq_peer_discovery_k8s,rabbitmq_federation_management,rabbitmq_shovel_management,rabbitmq_random_exchange].",
-			"rabbitmq.conf":
-				"cluster_formation.peer_discovery_backend  = rabbit_peer_discovery_k8s\n" +
+			"rabbitmq.conf": "cluster_formation.peer_discovery_backend  = rabbit_peer_discovery_k8s\n" +
 				"cluster_formation.k8s.host = kubernetes.default.svc.cluster.local\n" +
 				"cluster_formation.k8s.address_type = hostname\n" +
 
@@ -36,8 +36,8 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 
 				"queue_master_locator=min-masters\n" +
 				"cluster_partition_handling = autoheal\n" +
-				"default_pass = "+password+"\n" +
-				"default_user = rmq_admin\n"+
+				"default_pass = " + password + "\n" +
+				"default_user = rmq_admin\n" +
 
 				"tcp_listen_options.backlog = 4096\n" +
 				"tcp_listen_options.nodelay = true\n" +

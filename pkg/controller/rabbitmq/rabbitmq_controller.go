@@ -148,8 +148,8 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	for _, fun := range []reconcileFun{
 		r.reconcileRabbitMQ,
 		r.reconcileRabbitMQManager,
-		r.reconcileClusterStatus,
 		r.reconcileRabbitMQProxy,
+		r.reconcileClusterStatus,
 	} {
 		if err = fun(instance); err != nil {
 			return reconcile.Result{}, err

@@ -50,7 +50,10 @@ type RabbitMQStatus struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	RabbitmqUrl             string `json:rabbitmq_url`
+	RabbitmqPort            string `json:rabbitmq_port`
+	RabbitmqProxyUrl        string `json:rabbitmq_proxy_url`
 	RabbitmqManagerUrl      string `json:rabbitmq_manager_url`
+	RabbitmqManagerUsername string `json:rabbitmq_manager_username`
 	RabbitmqManagerPassword string `json:rabbitmq_manager_password`
 }
 
