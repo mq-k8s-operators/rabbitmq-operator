@@ -15,7 +15,7 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 	limit := resource.MustParse(cr.Spec.ProxyDiskLimit)
 	pv := make([]corev1.Volume, 0)
 	pv = append(pv, corev1.Volume{
-		Name: "kfk-mqp-data",
+		Name: "rmq-mqp-data",
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{
 				Medium:    "",
