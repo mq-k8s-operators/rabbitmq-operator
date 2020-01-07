@@ -230,6 +230,15 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	}
 
 	//check rabbitmq cluster ready for use
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: sts.Name, Namespace: sts.Namespace}, foundSts)
+	if err != nil {
+		return fmt.Errorf("CHECK rabbitmq Status Fail : %s", err)
+	}
+	if foundSts.Status.ReadyReplicas != foundSts.Status.Replicas {
+		r.log.Info("rabbitmq Not Ready", "Namespace", sts.Namespace, "Name", sts.Name)
+		return fmt.Errorf("rabbitmq Not Ready")
+	}
+	r.log.Info("rabbitmq Ready", "Namespace", sts.Namespace, "Name", sts.Name, "found", found)
 
 	return nil
 }

@@ -9,10 +9,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
+func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 	var replica int32 = 2
 
-	accessModes := make([]corev1.PersistentVolumeAccessMode, 0)
+	limit := resource.MustParse(cr.Spec.ProxyDiskLimit)
+	pv := make([]corev1.Volume, 0)
+	pv = append(pv, corev1.Volume{
+		Name: "kfk-mqp-data",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium:    "",
+				SizeLimit: &limit,
+			},
+		},
+	})
+
+	/*accessModes := make([]corev1.PersistentVolumeAccessMode, 0)
 	accessModes = append(accessModes, corev1.ReadWriteOnce)
 	pvc := make([]corev1.PersistentVolumeClaim, 0)
 	pvc = append(pvc, corev1.PersistentVolumeClaim{
@@ -31,7 +43,7 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
 			},
 			AccessModes: accessModes,
 		},
-	})
+	})*/
 
 	containers := make([]corev1.Container, 0)
 	ports := make([]corev1.ContainerPort, 0)
@@ -101,34 +113,58 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
 	}
 	containers = append(containers, c)
 
-	return &appsv1.StatefulSet{
+	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
+			Kind:       "Deployment",
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rmq-mqp-sts-" + cr.Name,
 			Namespace: cr.Namespace,
 		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas:    &replica,
-			ServiceName: "rmq-mqp-svc-" + cr.Name,
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replica,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "rmq-mqp-" + cr.Name},
+				MatchLabels: map[string]string{"app": "kfk-mqp-" + cr.Name},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "rmq-mqp-" + cr.Name,
+						"app": "kfk-mqp-" + cr.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: containers,
+					Volumes:    pv,
 				},
 			},
-			// for data store
-			VolumeClaimTemplates: pvc,
+			Strategy:                appsv1.DeploymentStrategy{},
+			MinReadySeconds:         0,
+			RevisionHistoryLimit:    nil,
+			Paused:                  false,
+			ProgressDeadlineSeconds: nil,
 		},
-		Status: appsv1.StatefulSetStatus{},
+
+		/*
+			Spec: appsv1.StatefulSetSpec{
+				Replicas:    &replica,
+				ServiceName: "rmq-mqp-svc-" + cr.Name,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": "rmq-mqp-" + cr.Name},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "rmq-mqp-" + cr.Name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: containers,
+					},
+				},
+				// for data store
+				VolumeClaimTemplates: pvc,
+			},
+			Status: appsv1.StatefulSetStatus{},*/
 	}
 }
