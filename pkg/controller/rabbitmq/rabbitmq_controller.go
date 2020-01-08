@@ -4,19 +4,18 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
-	"github.com/lesolise/rabbitmq-operator/pkg/utils"
-	v1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	lesolisev1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
+	"github.com/lesolise/rabbitmq-operator/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1beta12 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -234,7 +233,8 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	if err != nil {
 		return fmt.Errorf("CHECK rabbitmq Status Fail : %s", err)
 	}
-	if foundSts.Status.ReadyReplicas != foundSts.Status.Replicas {
+
+	if foundSts.Status.ReadyReplicas != instance.Spec.Size {
 		r.log.Info("rabbitmq Not Ready", "Namespace", sts.Namespace, "Name", sts.Name)
 		return fmt.Errorf("rabbitmq Not Ready")
 	}
