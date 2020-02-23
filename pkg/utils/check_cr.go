@@ -16,6 +16,11 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 		changed = true
 	}
 
+	if cr.Spec.ProxyImage == "" {
+		cr.Spec.ProxyImage = "jianzhiunique/mqproxy:latest"
+		changed = true
+	}
+
 	if cr.Spec.DiskLimit == "" {
 		cr.Spec.DiskLimit = "500Gi"
 		changed = true

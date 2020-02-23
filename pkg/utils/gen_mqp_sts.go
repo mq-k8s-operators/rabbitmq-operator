@@ -94,7 +94,7 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 	}
 	c := corev1.Container{
 		Name:           "rmq-mqp",
-		Image:          "jianzhiunique/mqproxy:latest",
+		Image:          cr.Spec.ProxyImage,
 		Ports:          ports,
 		Env:            envs,
 		VolumeMounts:   vms,
