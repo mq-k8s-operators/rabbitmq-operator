@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1beta12 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -145,17 +146,119 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 
 	// reconcile
 	for _, fun := range []reconcileFun{
+		r.reconcileFinalizers,
 		r.reconcileRabbitMQ,
 		r.reconcileRabbitMQManager,
 		r.reconcileRabbitMQProxy,
-		r.reconcileClusterStatus,
 	} {
 		if err = fun(instance); err != nil {
+			r.log.Info("reconcileClusterStatus with error")
+			r.reconcileClusterStatus(instance)
 			return reconcile.Result{}, err
+		} else {
+			r.log.Info("reconcileClusterStatus without error")
+			r.reconcileClusterStatus(instance)
 		}
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (err error) {
+	r.log.Info("instance.DeletionTimestamp is ", instance.DeletionTimestamp)
+	// instance is not deleted
+	if instance.DeletionTimestamp.IsZero() {
+		if !utils.ContainsString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer)
+			if err = r.client.Update(context.TODO(), instance); err != nil {
+				return err
+			}
+		}
+		return r.cleanupOrphanPVCs(instance)
+	} else {
+		// instance is deleted
+		if utils.ContainsString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer) {
+			if err = r.cleanUpAllPVCs(instance); err != nil {
+				return err
+			}
+			instance.ObjectMeta.Finalizers = utils.RemoveString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer)
+			if err = r.client.Update(context.TODO(), instance); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) getPVCCount(instance *lesolisev1.RabbitMQ) (pvcCount int, err error) {
+	pvcList, err := r.getPVCList(instance)
+	if err != nil {
+		return -1, err
+	}
+	pvcCount = len(pvcList.Items)
+	return pvcCount, nil
+}
+
+func (r *ReconcileRabbitMQ) cleanupOrphanPVCs(instance *lesolisev1.RabbitMQ) (err error) {
+	// this check should make sure we do not delete the PVCs before the STS has scaled down
+	if instance.Status.Replicas == instance.Spec.Size {
+		pvcCount, err := r.getPVCCount(instance)
+		if err != nil {
+			return err
+		}
+		r.log.Info("cleanupOrphanPVCs", "PVC Count", pvcCount, "ReadyReplicas Count", instance.Status.Replicas)
+		if pvcCount > int(instance.Spec.Size) {
+			pvcList, err := r.getPVCList(instance)
+			if err != nil {
+				return err
+			}
+			for _, pvcItem := range pvcList.Items {
+				// delete only Orphan PVCs
+				if utils.IsPVCOrphan(pvcItem.Name, instance.Spec.Size) {
+					r.deletePVC(pvcItem)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) getPVCList(instance *lesolisev1.RabbitMQ) (pvList corev1.PersistentVolumeClaimList, err error) {
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: map[string]string{"app": "rmq-node-" + instance.Name},
+	})
+	pvclistOps := &client.ListOptions{
+		Namespace:     instance.Namespace,
+		LabelSelector: selector,
+	}
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	err = r.client.List(context.TODO(), pvcList, pvclistOps)
+	return *pvcList, err
+}
+
+func (r *ReconcileRabbitMQ) cleanUpAllPVCs(instance *lesolisev1.RabbitMQ) (err error) {
+	pvcList, err := r.getPVCList(instance)
+	if err != nil {
+		return err
+	}
+	for _, pvcItem := range pvcList.Items {
+		r.deletePVC(pvcItem)
+	}
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) deletePVC(pvcItem corev1.PersistentVolumeClaim) {
+	pvcDelete := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcItem.Name,
+			Namespace: pvcItem.Namespace,
+		},
+	}
+	r.log.Info("Deleting PVC", "With Name", pvcItem.Name)
+	err := r.client.Delete(context.TODO(), pvcDelete)
+	if err != nil {
+		r.log.Error(err, "Error deleteing PVC.", "Name", pvcDelete.Name)
+	}
 }
 
 func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) error {
@@ -180,6 +283,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 		// any exception
 		return fmt.Errorf("GET ConfigMap fail : %s", err)
 	}
+	instance.Status.Progress = 0.1
 
 	//check lb svc
 	lbsvc := utils.NewLBSvcForCR(instance)
@@ -198,6 +302,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	} else if err != nil {
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
+	instance.Status.Progress = 0.2
 
 	//check sts
 	sts := utils.NewStsForCR(instance)
@@ -236,9 +341,11 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 
 	if foundSts.Status.ReadyReplicas != instance.Spec.Size {
 		r.log.Info("rabbitmq Not Ready", "Namespace", sts.Namespace, "Name", sts.Name)
+		instance.Status.Progress = float32(foundSts.Status.ReadyReplicas)/float32(foundSts.Status.Replicas)*0.3 + 0.2
 		return fmt.Errorf("rabbitmq Not Ready")
 	}
 	r.log.Info("rabbitmq Ready", "Namespace", sts.Namespace, "Name", sts.Name, "found", found)
+	instance.Status.Replicas = instance.Spec.Size
 
 	return nil
 }
@@ -261,6 +368,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 	} else if err != nil {
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
+	instance.Status.Progress = 0.6
 
 	//check ingress
 	rmi := utils.NewRabbitMQManagementIngressForCR(instance)
@@ -280,6 +388,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
 	}
 
+	instance.Status.Progress = 0.7
 	return nil
 }
 
@@ -301,6 +410,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 	} else if err != nil {
 		return fmt.Errorf("GET proxy fail : %s", err)
 	}
+	instance.Status.Progress = 0.8
 
 	//check svc
 	svc := utils.NewMqpSvcForCR(instance)
@@ -320,6 +430,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 		return fmt.Errorf("GET proxy svc fail : %s", err)
 	}
 
+	instance.Status.Progress = 1.0
 	return nil
 }
 

@@ -125,12 +125,12 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replica,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "kfk-mqp-" + cr.Name},
+				MatchLabels: map[string]string{"app": "rmq-mqp-" + cr.Name},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "kfk-mqp-" + cr.Name,
+						"app": "rmq-mqp-" + cr.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
