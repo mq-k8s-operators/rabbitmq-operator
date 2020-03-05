@@ -35,7 +35,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 				"cluster_formation.node_cleanup.only_log_warning = false\n" +
 
 				"queue_master_locator=min-masters\n" +
-				"cluster_partition_handling = autoheal\n" +
+				"cluster_partition_handling = pause_minority\n" +
 				"default_pass = " + password + "\n" +
 				"default_user = rmq_admin\n" +
 
@@ -50,7 +50,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 				"vm_memory_high_watermark.relative = 0.45\n" +
 				"vm_memory_high_watermark_paging_ratio = 0.5\n" +
 				"disk_free_limit.relative = 1.2\n" +
-				"collect_statistics_interval = 10000\n" +
+				"collect_statistics_interval = 30000\n" +
 				"log.file.rotation.date = $D0\n",
 		},
 	}

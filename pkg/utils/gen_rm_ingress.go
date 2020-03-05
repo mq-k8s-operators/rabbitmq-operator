@@ -9,8 +9,9 @@ import (
 )
 
 func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
+	pathStr := "/" + cr.Namespace + "-" + cr.Name + "-rabbitmq"
 	if cr.Status.RabbitmqManagerUrl == "" {
-		cr.Status.RabbitmqManagerUrl = cr.Name + cr.Spec.ManagerHost
+		cr.Status.RabbitmqManagerUrl = cr.Spec.ManagerHost + pathStr
 	}
 
 	paths := make([]v1beta12.HTTPIngressPath, 0)
@@ -27,7 +28,7 @@ func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
 
 	rules := make([]v1beta12.IngressRule, 0)
 	rule := v1beta12.IngressRule{
-		Host: cr.Status.RabbitmqManagerUrl,
+		Host: cr.Spec.ManagerHost,
 		IngressRuleValue: v1beta12.IngressRuleValue{
 			HTTP: &v1beta12.HTTPIngressRuleValue{
 				Paths: paths,

@@ -134,8 +134,9 @@ func NewProxyForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers: containers,
-					Volumes:    pv,
+					Containers:         containers,
+					Volumes:            pv,
+					ServiceAccountName: "rabbitmq-operator",
 				},
 			},
 			Strategy:                appsv1.DeploymentStrategy{},

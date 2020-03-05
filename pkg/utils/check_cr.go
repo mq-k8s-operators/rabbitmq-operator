@@ -82,7 +82,7 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 	}
 
 	if cr.Spec.ManagerHost == "" {
-		cr.Spec.ManagerHost = ".rmq.cloudmq.com"
+		cr.Spec.ManagerHost = "rmq.cloudmq.com"
 		changed = true
 	}
 
