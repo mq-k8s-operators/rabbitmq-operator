@@ -35,6 +35,8 @@ type RabbitMQSpec struct {
 	// then you can bind hosts test.rmq.com to access it
 	// default value is .rmq.com
 	ManagerHost string `json:"rabbitmq_manager_host,omitempty"`
+	// alias prefix for RabbitmqManagerUrl in status, if this field is empty, then use ManagerHost
+	ManagerHostAlias string `json:"rabbitmq_manager_host_alias,omitempty"`
 	// for proxy
 	ProxyDiskLimit     string `json:"proxy_disk_limit,omitempty"`
 	ProxyDiskRequest   string `json:"proxy_disk_request,omitempty"`

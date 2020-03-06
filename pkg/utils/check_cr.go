@@ -86,5 +86,10 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 		changed = true
 	}
 
+	if cr.Spec.ManagerHostAlias == "" {
+		cr.Spec.ManagerHostAlias = ""
+		changed = true
+	}
+
 	return changed
 }

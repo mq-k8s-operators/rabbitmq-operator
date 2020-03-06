@@ -9,14 +9,19 @@ import (
 )
 
 func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
-	pathStr := "/" + cr.Namespace + "-" + cr.Name + "-rabbitmq"
+	pathStr := "/" + cr.Namespace + "-" + cr.Name + "-rabbitmq/"
 	if cr.Status.RabbitmqManagerUrl == "" {
-		cr.Status.RabbitmqManagerUrl = cr.Spec.ManagerHost + pathStr
+		if cr.Spec.ManagerHostAlias == "" {
+			cr.Status.RabbitmqManagerUrl = cr.Spec.ManagerHost + pathStr
+		} else {
+			cr.Status.RabbitmqManagerUrl = cr.Spec.ManagerHostAlias + pathStr
+		}
+
 	}
 
 	paths := make([]v1beta12.HTTPIngressPath, 0)
 	path := v1beta12.HTTPIngressPath{
-		Path: "/",
+		Path: pathStr,
 		Backend: v1beta12.IngressBackend{
 			ServicePort: intstr.IntOrString{
 				IntVal: 15672,
@@ -48,6 +53,9 @@ func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rmq-m-ingress-" + cr.Name,
 			Namespace: cr.Namespace,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/rewrite-target": "/",
+			},
 		},
 		Spec: v1beta12.IngressSpec{
 			Rules: rules,

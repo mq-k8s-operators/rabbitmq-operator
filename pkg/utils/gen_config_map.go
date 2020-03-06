@@ -51,6 +51,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 				"vm_memory_high_watermark_paging_ratio = 0.5\n" +
 				"disk_free_limit.relative = 1.2\n" +
 				"collect_statistics_interval = 30000\n" +
+				"management.path_prefix = /" + cr.Namespace + "-" + cr.Name + "-rabbitmq/\n" +
 				"log.file.rotation.date = $D0\n",
 		},
 	}
