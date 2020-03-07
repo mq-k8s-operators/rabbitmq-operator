@@ -7,17 +7,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
-	pathStr := "/" + cr.Namespace + "-" + cr.Name + "/"
+func NewToolsIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
 
 	paths := make([]v1beta12.HTTPIngressPath, 0)
 	path := v1beta12.HTTPIngressPath{
-		Path: pathStr + "(.*)",
+		Path: cr.Status.RabbitmqManagerPath + "(.*)",
 		Backend: v1beta12.IngressBackend{
 			ServicePort: intstr.IntOrString{
-				IntVal: 15672,
+				IntVal: 8888,
 			},
-			ServiceName: "rmq-m-svc-" + cr.Name,
+			ServiceName: "rmq-tools-svc-" + cr.Name,
 		},
 	}
 	paths = append(paths, path)
@@ -39,7 +38,7 @@ func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
 			Kind:       "Ingress",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rmq-m-ingress-" + cr.Name,
+			Name:      "rmq-tools-ingress-" + cr.Name,
 			Namespace: cr.Namespace,
 			Annotations: map[string]string{
 				"nginx.ingress.kubernetes.io/rewrite-target": "/$1",

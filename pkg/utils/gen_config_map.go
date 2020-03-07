@@ -4,17 +4,9 @@ import (
 	v1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"time"
 )
 
 func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
-	password := GetRandomString(16)
-	if cr.Status.RabbitmqManagerPassword == "" {
-		cr.Status.RabbitmqManagerPassword = password
-	}
-	cr.Status.RabbitmqManagerUsername = "rmq_admin"
-
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -36,8 +28,8 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 
 				"queue_master_locator=min-masters\n" +
 				"cluster_partition_handling = pause_minority\n" +
-				"default_pass = " + password + "\n" +
-				"default_user = rmq_admin\n" +
+				"default_pass = " + cr.Status.RabbitmqManagerPassword + "\n" +
+				"default_user = " + cr.Status.RabbitmqManagerUsername + "\n" +
 
 				"tcp_listen_options.backlog = 4096\n" +
 				"tcp_listen_options.nodelay = true\n" +
@@ -51,19 +43,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 				"vm_memory_high_watermark_paging_ratio = 0.5\n" +
 				"disk_free_limit.relative = 1.2\n" +
 				"collect_statistics_interval = 30000\n" +
-				"management.path_prefix = /" + cr.Namespace + "-" + cr.Name + "-rabbitmq/\n" +
 				"log.file.rotation.date = $D0\n",
 		},
 	}
-}
-
-func GetRandomString(l int) string {
-	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	bytes := []byte(str)
-	result := []byte{}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < l; i++ {
-		result = append(result, bytes[r.Intn(len(bytes))])
-	}
-	return string(result)
 }

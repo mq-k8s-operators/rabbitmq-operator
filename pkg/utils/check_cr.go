@@ -91,5 +91,45 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 		changed = true
 	}
 
+	if cr.Spec.ToolsDiskLimit == "" {
+		cr.Spec.ToolsDiskLimit = "10Gi"
+		changed = true
+	}
+
+	if cr.Spec.ToolsDiskRequest == "" {
+		cr.Spec.ToolsDiskRequest = "1Gi"
+		changed = true
+	}
+
+	if cr.Spec.ToolsMemoryLimit == "" {
+		cr.Spec.ToolsMemoryLimit = "2Gi"
+		changed = true
+	}
+
+	if cr.Spec.ToolsMemoryRequest == "" {
+		cr.Spec.ToolsMemoryRequest = "1Gi"
+		changed = true
+	}
+
+	if cr.Spec.ToolsCpuLimit == "" {
+		cr.Spec.ToolsCpuLimit = "2000m"
+		changed = true
+	}
+
+	if cr.Spec.ToolsCpuRequest == "" {
+		cr.Spec.ToolsCpuRequest = "500m"
+		changed = true
+	}
+
+	if cr.Spec.ToolsAdminDingUrl == "" {
+		cr.Spec.ToolsAdminDingUrl = "https://oapi.dingtalk.com/robot/send?access_token="
+		changed = true
+	}
+
+	if cr.Spec.ToolsImage == "" {
+		cr.Spec.ToolsImage = "registry.cn-hangzhou.aliyuncs.com/jianzhiunique/rabbitmq-management:1.0.0"
+		changed = true
+	}
+
 	return changed
 }

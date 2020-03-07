@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"math/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -22,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"time"
 )
 
 var log = logf.Log.WithName("controller_rabbitmq")
@@ -144,11 +146,40 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	if instance.Status.RabbitmqManagerPassword == "" {
+		instance.Status.RabbitmqManagerPassword = GetRandomString(16)
+	}
+	if instance.Status.RabbitmqManagerUsername == "" {
+		instance.Status.RabbitmqManagerUsername = "rmq_admin"
+	}
+	if instance.Status.RabbitmqUrl == "" {
+		instance.Status.RabbitmqUrl = "rmq-svc-" + instance.Name
+	}
+	if instance.Status.RabbitmqPort == "" {
+		instance.Status.RabbitmqPort = "5672"
+	}
+	if instance.Status.RabbitmqProxyUrl == "" {
+		instance.Status.RabbitmqProxyUrl = "rmq-mqp-svc-" + instance.Name + ":8080"
+	}
+	if instance.Status.RabbitmqManagerPath == "" {
+		instance.Status.RabbitmqManagerPath = "/" + instance.Namespace + "-" + instance.Name + "-rabbitmq/"
+	}
+
+	if instance.Status.RabbitmqManagerUrl == "" {
+		if instance.Spec.ManagerHostAlias == "" {
+			instance.Status.RabbitmqManagerUrl = instance.Spec.ManagerHost + instance.Status.RabbitmqManagerPath
+		} else {
+			instance.Status.RabbitmqManagerUrl = instance.Spec.ManagerHostAlias + instance.Status.RabbitmqManagerPath
+		}
+	}
+	r.reconcileClusterStatus(instance)
+
 	// reconcile
 	for _, fun := range []reconcileFun{
 		r.reconcileFinalizers,
 		r.reconcileRabbitMQ,
 		r.reconcileRabbitMQManager,
+		r.reconcileMQManagementTools,
 		r.reconcileRabbitMQProxy,
 	} {
 		if err = fun(instance); err != nil {
@@ -162,6 +193,17 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func GetRandomString(l int) string {
+	str := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	bytes := []byte(str)
+	result := []byte{}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < l; i++ {
+		result = append(result, bytes[r.Intn(len(bytes))])
+	}
+	return string(result)
 }
 
 func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (err error) {
@@ -279,11 +321,11 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 		if err != nil {
 			return fmt.Errorf("Create ConfigMap fail : %s", err)
 		}
+		instance.Status.Progress = 0.1
 	} else if err != nil {
 		// any exception
 		return fmt.Errorf("GET ConfigMap fail : %s", err)
 	}
-	instance.Status.Progress = 0.1
 
 	//check lb svc
 	lbsvc := utils.NewLBSvcForCR(instance)
@@ -299,10 +341,10 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 		if err != nil {
 			return fmt.Errorf("Create lb svc fail : %s", err)
 		}
+		instance.Status.Progress = 0.2
 	} else if err != nil {
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
-	instance.Status.Progress = 0.2
 
 	//check sts
 	sts := utils.NewStsForCR(instance)
@@ -365,10 +407,10 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		if err != nil {
 			return fmt.Errorf("Create headless svc fail : %s", err)
 		}
+		instance.Status.Progress = 0.6
 	} else if err != nil {
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
-	instance.Status.Progress = 0.6
 
 	//check ingress
 	rmi := utils.NewRabbitMQManagementIngressForCR(instance)
@@ -384,11 +426,72 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		if err != nil {
 			return fmt.Errorf("Create rabbitmq management ingress fail : %s", err)
 		}
+		instance.Status.Progress = 0.65
 	} else if err != nil {
 		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
 	}
 
-	instance.Status.Progress = 0.7
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.RabbitMQ) error {
+	//check
+	dep := utils.NewToolsForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
+		return fmt.Errorf("SET proxy Owner fail : %s", err)
+	}
+	found := &appsv1.Deployment{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, found)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new MQManagementTools", "Namespace", dep.Namespace, "Name", dep.Name)
+		err = r.client.Create(context.TODO(), dep)
+		if err != nil {
+			return fmt.Errorf("Create proxy fail : %s", err)
+		}
+		instance.Status.Progress = 0.7
+	} else if err != nil {
+		return fmt.Errorf("GET proxy fail : %s", err)
+	}
+
+	//check svc
+	svc := utils.NewToolsSvcForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
+		return fmt.Errorf("SET Management SVC Owner fail : %s", err)
+	}
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, foundSvc)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new MQManagementTools svc", "Svc.Namespace", svc.Namespace, "Svc.Name", svc.Name)
+		err = r.client.Create(context.TODO(), svc)
+		if err != nil {
+			return fmt.Errorf("Create headless svc fail : %s", err)
+		}
+		instance.Status.Progress = 0.75
+	} else if err != nil {
+		return fmt.Errorf("GET svc fail : %s", err)
+	}
+
+	//check ingress
+	rmi := utils.NewToolsIngressForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, rmi, r.scheme); err != nil {
+		return fmt.Errorf("SET ingress Owner fail : %s", err)
+	}
+	foundKmi := &v1beta12.Ingress{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rmi.Name, Namespace: rmi.Namespace}, foundKmi)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new MQManagementTools ingress", "Namespace", rmi.Namespace, "Name", rmi.Name)
+		err = r.client.Create(context.TODO(), rmi)
+		if err != nil {
+			return fmt.Errorf("Create rabbitmq management ingress fail : %s", err)
+		}
+		instance.Status.Progress = 0.8
+	} else if err != nil {
+		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+	}
+
 	return nil
 }
 
@@ -407,10 +510,10 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 		if err != nil {
 			return fmt.Errorf("Create proxy fail : %s", err)
 		}
+		instance.Status.Progress = 0.9
 	} else if err != nil {
 		return fmt.Errorf("GET proxy fail : %s", err)
 	}
-	instance.Status.Progress = 0.8
 
 	//check svc
 	svc := utils.NewMqpSvcForCR(instance)
@@ -426,6 +529,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 		if err != nil {
 			return fmt.Errorf("Create proxy svc fail : %s", err)
 		}
+		instance.Status.Progress = 1.0
 	} else if err != nil {
 		return fmt.Errorf("GET proxy svc fail : %s", err)
 	}

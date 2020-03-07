@@ -44,6 +44,15 @@ type RabbitMQSpec struct {
 	ProxyMemoryLimit   string `json:"proxy_memory_limit,omitempty"`
 	ProxyCpuLimit      string `json:"proxy_cpu_limit,omitempty"`
 	ProxyCpuRequest    string `json:"proxy_cpu_request,omitempty"`
+	// for mq management tools
+	ToolsImage         string `json:"tools_image,omitempty"`
+	ToolsAdminDingUrl  string `json:"tools_admin_ding_url,omitempty"`
+	ToolsDiskLimit     string `json:"tools_disk_limit,omitempty"`
+	ToolsDiskRequest   string `json:"tools_disk_request,omitempty"`
+	ToolsMemoryRequest string `json:"tools_memory_request,omitempty"`
+	ToolsMemoryLimit   string `json:"tools_memory_limit,omitempty"`
+	ToolsCpuLimit      string `json:"tools_cpu_limit,omitempty"`
+	ToolsCpuRequest    string `json:"tools_cpu_request,omitempty"`
 }
 
 // RabbitMQStatus defines the observed state of RabbitMQ
@@ -55,6 +64,7 @@ type RabbitMQStatus struct {
 	RabbitmqUrl             string  `json:rabbitmq_url`
 	RabbitmqPort            string  `json:rabbitmq_port`
 	RabbitmqProxyUrl        string  `json:rabbitmq_proxy_url`
+	RabbitmqManagerPath     string  `json:rabbitmq_manager_path`
 	RabbitmqManagerUrl      string  `json:rabbitmq_manager_url`
 	RabbitmqManagerUsername string  `json:rabbitmq_manager_username`
 	RabbitmqManagerPassword string  `json:rabbitmq_manager_password`

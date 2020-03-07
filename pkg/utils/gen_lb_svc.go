@@ -13,8 +13,7 @@ func NewLBSvcForCR(cr *v1.RabbitMQ) *corev1.Service {
 	amqpPort := corev1.ServicePort{Port: 5672, Name: "amqp"}
 	ports := make([]corev1.ServicePort, 0)
 	ports = append(ports, amqpPort)
-	cr.Status.RabbitmqUrl = "rmq-svc-" + cr.Name
-	cr.Status.RabbitmqPort = "5672"
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
