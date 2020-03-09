@@ -8,7 +8,7 @@ import (
 )
 
 func NewRabbitMQManagementIngressForCR(cr *v1.RabbitMQ) *v1beta12.Ingress {
-	pathStr := "/" + cr.Namespace + "-" + cr.Name + "/"
+	pathStr := "/rmq-" + cr.Namespace + "-" + cr.Name + "/"
 
 	paths := make([]v1beta12.HTTPIngressPath, 0)
 	path := v1beta12.HTTPIngressPath{
