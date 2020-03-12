@@ -183,6 +183,24 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
 							},
 						},
 					},
+					/*
+						Affinity: &corev1.Affinity{
+							NodeAffinity:    &corev1.NodeAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution:  &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchExpressions: []corev1.NodeSelectorRequirement{
+												{
+													Key: "nodegroup/rabbitmq",
+													Operator: corev1.NodeSelectorOpExists,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					*/
 				},
 			},
 			// for rabbitmq data store
