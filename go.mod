@@ -3,14 +3,15 @@ module github.com/lesolise/rabbitmq-operator
 go 1.13
 
 require (
+	github.com/coreos/prometheus-operator v0.38.1
 	github.com/go-logr/logr v0.1.0
-	github.com/go-openapi/spec v0.19.0
+	github.com/go-openapi/spec v0.19.2
 	github.com/operator-framework/operator-sdk v0.12.0
-	github.com/spf13/pflag v1.0.3
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
-	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
+	github.com/spf13/pflag v1.0.5
+	k8s.io/api v0.17.3
+	k8s.io/apimachinery v0.17.3
+	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
 	sigs.k8s.io/controller-runtime v0.3.0
 )
 

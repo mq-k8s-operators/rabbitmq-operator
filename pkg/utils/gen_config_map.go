@@ -18,7 +18,7 @@ func NewConfigMapForCR(cr *v1.RabbitMQ) *corev1.ConfigMap {
 		},
 		//TODO rabbitmq_delayed_message_exchange this need a init container
 		Data: map[string]string{
-			"enabled_plugins": "[rabbitmq_management,rabbitmq_peer_discovery_k8s,rabbitmq_federation_management,rabbitmq_shovel_management,rabbitmq_random_exchange].",
+			"enabled_plugins": "[rabbitmq_management,rabbitmq_peer_discovery_k8s,rabbitmq_federation_management,rabbitmq_shovel_management,rabbitmq_random_exchange,rabbitmq_prometheus].",
 			"rabbitmq.conf": "cluster_formation.peer_discovery_backend  = rabbit_peer_discovery_k8s\n" +
 				"cluster_formation.k8s.host = kubernetes.default.svc.cluster.local\n" +
 				"cluster_formation.k8s.address_type = hostname\n" +

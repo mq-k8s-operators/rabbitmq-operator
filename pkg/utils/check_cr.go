@@ -129,7 +129,7 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 	}
 
 	if cr.Spec.ToolsImage == "" {
-		cr.Spec.ToolsImage = "registry.cn-hangzhou.aliyuncs.com/jianzhiunique/rabbitmq-management:1.0.0"
+		cr.Spec.ToolsImage = "registry.cn-hangzhou.aliyuncs.com/jianzhiunique/rabbitmq-management:latest"
 		changed = true
 	}
 

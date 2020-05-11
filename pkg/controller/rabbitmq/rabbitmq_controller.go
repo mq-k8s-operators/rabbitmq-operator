@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
+	v12 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/go-logr/logr"
 	lesolisev1 "github.com/lesolise/rabbitmq-operator/pkg/apis/lesolise/v1"
 	"github.com/lesolise/rabbitmq-operator/pkg/utils"
@@ -10,6 +11,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1beta12 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/api/rbac/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -174,6 +176,54 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	}
 	r.reconcileClusterStatus(instance)
 
+	// check ServiceAccount
+	sa := utils.NewServiceAccountForCR(instance)
+	foundSa := &corev1.ServiceAccount{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace}, foundSa)
+	// if not exists
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating ServiceAccount for Namespace", sa.Namespace)
+		err = r.client.Create(context.TODO(), sa)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else if err != nil {
+		// any exception
+		return reconcile.Result{}, err
+	}
+
+	// check Role
+	role := utils.NewRoleForCR(instance)
+	foundRole := &v1beta1.Role{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, foundRole)
+	// if not exists
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating Role for Namespace", role.Namespace)
+		err = r.client.Create(context.TODO(), role)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else if err != nil {
+		// any exception
+		return reconcile.Result{}, err
+	}
+
+	// check Role Binding
+	roleBinding := utils.NewRoleBindingForCR(instance)
+	foundRoleBinding := &v1beta1.RoleBinding{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, foundRoleBinding)
+	// if not exists
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating RoleBinding for Namespace", roleBinding.Namespace)
+		err = r.client.Create(context.TODO(), roleBinding)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else if err != nil {
+		// any exception
+		return reconcile.Result{}, err
+	}
+
 	// reconcile
 	for _, fun := range []reconcileFun{
 		r.reconcileFinalizers,
@@ -181,6 +231,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 		r.reconcileRabbitMQManager,
 		r.reconcileMQManagementTools,
 		r.reconcileRabbitMQProxy,
+		r.reconcileServiceMonitor,
 	} {
 		if err = fun(instance); err != nil {
 			r.log.Info("reconcileClusterStatus with error")
@@ -338,6 +389,25 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	if err != nil && errors.IsNotFound(err) {
 		r.log.Info("Creating a new lb svc", "Svc.Namespace", lbsvc.Namespace, "Svc.Name", lbsvc.Name)
 		err = r.client.Create(context.TODO(), lbsvc)
+		if err != nil {
+			return fmt.Errorf("Create lb svc fail : %s", err)
+		}
+		instance.Status.Progress = 0.2
+	} else if err != nil {
+		return fmt.Errorf("GET svc fail : %s", err)
+	}
+
+	//prometheus metrics
+	monitorSvc := utils.NewMonitorSvcForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, monitorSvc, r.scheme); err != nil {
+		return fmt.Errorf("SET SVC Owner fail : %s", err)
+	}
+	foundMonitorSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: monitorSvc.Name, Namespace: monitorSvc.Namespace}, foundMonitorSvc)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new lb svc", "Svc.Namespace", monitorSvc.Namespace, "Svc.Name", monitorSvc.Name)
+		err = r.client.Create(context.TODO(), monitorSvc)
 		if err != nil {
 			return fmt.Errorf("Create lb svc fail : %s", err)
 		}
@@ -535,6 +605,28 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 	}
 
 	instance.Status.Progress = 1.0
+	return nil
+}
+
+func (r *ReconcileRabbitMQ) reconcileServiceMonitor(instance *lesolisev1.RabbitMQ) (err error) {
+	svcm := utils.NewSvcMonitorForCR(instance)
+	if err := controllerutil.SetControllerReference(instance, svcm, r.scheme); err != nil {
+		return fmt.Errorf("SET svcm Owner fail : %s", err)
+	}
+	foundSvcm := &v12.ServiceMonitor{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: foundSvcm.Name, Namespace: foundSvcm.Namespace}, foundSvcm)
+
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating exporter svc", "Namespace", svcm.Namespace, "Name", svcm.Name)
+		err = r.client.Create(context.TODO(), svcm)
+		if err != nil {
+			return fmt.Errorf("Create svcm fail : %s", err)
+		}
+		instance.Status.Progress = 1.0
+	} else if err != nil {
+		return fmt.Errorf("GET svcm fail : %s", err)
+	}
+
 	return nil
 }
 

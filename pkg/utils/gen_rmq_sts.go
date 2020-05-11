@@ -154,13 +154,15 @@ func NewStsForCR(cr *v1.RabbitMQ) *appsv1.StatefulSet {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "rmq-node-" + cr.Name,
+						"app":     "rmq-node-" + cr.Name,
+						"cluster": "rmq-" + cr.Namespace + "-" + cr.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
-					// we must specify the service account name for pod
+					// we must specify the service account name for pod because rabbitmq need call k8s api
+					// otherwise crash: Failed to fetch a list of nodes from Kubernetes API: 403
 					// see: https://github.com/rabbitmq/rabbitmq-peer-discovery-k8s/pull/16/commits/e0222510e5f69b98c21b92fa14db7ee57887daf6
-					ServiceAccountName: "rabbitmq-operator",
+					ServiceAccountName: "rabbitmq",
 					Containers:         containers,
 					// for config files generate from config map
 					Volumes: []corev1.Volume{

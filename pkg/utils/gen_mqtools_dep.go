@@ -118,13 +118,13 @@ func NewToolsForCR(cr *v1.RabbitMQ) *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "rmq-tools-" + cr.Name,
+						"app":     "rmq-tools-" + cr.Name,
+						"cluster": "rmq-" + cr.Namespace + "-" + cr.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers:         containers,
-					Volumes:            pv,
-					ServiceAccountName: "rabbitmq-operator",
+					Containers: containers,
+					Volumes:    pv,
 				},
 			},
 			Strategy:                appsv1.DeploymentStrategy{},

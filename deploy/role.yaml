@@ -15,6 +15,7 @@ rules:
   - events
   - configmaps
   - secrets
+  - serviceaccounts
   verbs:
   - '*'
 - apiGroups:
@@ -62,6 +63,19 @@ rules:
   - '*'
 - apiGroups:
     - extensions
+  resources:
+    - '*'
+  verbs:
+    - '*'
+- apiGroups:
+    - rbac.authorization.k8s.io
+  resources:
+    - roles
+    - rolebindings
+  verbs:
+    - '*'
+- apiGroups:
+    - monitoring.coreos.com
   resources:
     - '*'
   verbs:
