@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	KafkaFinalizer = "cleanUpRabbitMQPVC"
+	Finalizer = "cleanUpRabbitMQPVC"
 )
 
 func ContainsString(slice []string, str string) bool {

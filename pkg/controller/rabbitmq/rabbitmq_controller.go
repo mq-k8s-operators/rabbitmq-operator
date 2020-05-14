@@ -86,13 +86,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	err = c.Watch(&source.Kind{Type: &v1beta12.Ingress{}}, &handler.EnqueueRequestForOwner{
+	//解除对ingress的监听，防止删除共用ingress？但需要考虑删除逻辑
+	/*err = c.Watch(&source.Kind{Type: &v1beta12.Ingress{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &lesolisev1.RabbitMQ{},
 	})
 	if err != nil {
 		return err
-	}
+	}*/
 
 	return nil
 }
@@ -261,8 +262,8 @@ func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (
 	r.log.Info("instance.DeletionTimestamp is ", instance.DeletionTimestamp)
 	// instance is not deleted
 	if instance.DeletionTimestamp.IsZero() {
-		if !utils.ContainsString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer) {
-			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer)
+		if !utils.ContainsString(instance.ObjectMeta.Finalizers, utils.Finalizer) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, utils.Finalizer)
 			if err = r.client.Update(context.TODO(), instance); err != nil {
 				return err
 			}
@@ -270,11 +271,29 @@ func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (
 		return r.cleanupOrphanPVCs(instance)
 	} else {
 		// instance is deleted
-		if utils.ContainsString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer) {
+		if utils.ContainsString(instance.ObjectMeta.Finalizers, utils.Finalizer) {
 			if err = r.cleanUpAllPVCs(instance); err != nil {
 				return err
 			}
-			instance.ObjectMeta.Finalizers = utils.RemoveString(instance.ObjectMeta.Finalizers, utils.KafkaFinalizer)
+
+			//删除ingress path
+			foundIngress := &v1beta12.Ingress{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: "mq-ingress", Namespace: instance.Spec.IngressNamespace}, foundIngress)
+
+			if err != nil && errors.IsNotFound(err) {
+
+			} else if err != nil {
+
+			} else {
+				utils.DeleteManagementPathFromIngress(instance, foundIngress)
+				utils.DeleteRabbitMQToolsPathFromIngress(instance, foundIngress)
+				err = r.client.Update(context.TODO(), foundIngress)
+				if err != nil {
+					return fmt.Errorf("update ingress fail when reconcileFinalizers: %s", err)
+				}
+			}
+
+			instance.ObjectMeta.Finalizers = utils.RemoveString(instance.ObjectMeta.Finalizers, utils.Finalizer)
 			if err = r.client.Update(context.TODO(), instance); err != nil {
 				return err
 			}
@@ -357,7 +376,7 @@ func (r *ReconcileRabbitMQ) deletePVC(pvcItem corev1.PersistentVolumeClaim) {
 func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) error {
 	//check config map
 	config := utils.NewConfigMapForCR(instance)
-	// Set Kafka instance as the owner and controller
+	// Set rabbitmq instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, config, r.scheme); err != nil {
 		return fmt.Errorf("SET ConfigMap Owner fail : %s", err)
 	}
@@ -482,11 +501,35 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
 
-	//check ingress
-	rmi := utils.NewRabbitMQManagementIngressForCR(instance)
-	if err := controllerutil.SetControllerReference(instance, rmi, r.scheme); err != nil {
-		return fmt.Errorf("SET ingress Owner fail : %s", err)
+	//如果资源所在的ns 与 ingress所在的ns不同，需要额外创建ExternalName类型的svc
+	if instance.Namespace != instance.Spec.IngressNamespace {
+		external := utils.NewManagementExternalSvcForCR(instance)
+		//关联控制
+		if err := controllerutil.SetControllerReference(instance, external, r.scheme); err != nil {
+			return fmt.Errorf("SET Management external svc Owner fail : %s", err)
+		}
+		//检查是否已经存在
+		foundExternal := &corev1.Service{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: external.Name, Namespace: external.Namespace}, foundExternal)
+
+		if err != nil && errors.IsNotFound(err) {
+			//如果不存在新建
+			r.log.Info("Creating a new Management external svc", "Namespace", external.Namespace, "Name", external.Name)
+			err = r.client.Create(context.TODO(), external)
+			if err != nil {
+				return fmt.Errorf("Create Management external svc fail : %s", err)
+			}
+		} else if err != nil {
+			//如果发生错误重新调谐
+			return fmt.Errorf("GET Management external svc fail : %s", err)
+		}
 	}
+
+	//check ingress
+	rmi := utils.NewIngressForCRIfNotExists(instance)
+	/*if err := controllerutil.SetControllerReference(instance, rmi, r.scheme); err != nil {
+		return fmt.Errorf("SET ingress Owner fail : %s", err)
+	}*/
 	foundKmi := &v1beta12.Ingress{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rmi.Name, Namespace: rmi.Namespace}, foundKmi)
 
@@ -499,6 +542,13 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		instance.Status.Progress = 0.65
 	} else if err != nil {
 		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+	} else {
+		utils.AppendManagementPathToIngress(instance, foundKmi)
+		err = r.client.Update(context.TODO(), foundKmi)
+		if err != nil {
+			return fmt.Errorf("update rabbitmq management ingress fail : %s", err)
+		}
+		instance.Status.Progress = 0.65
 	}
 
 	return nil
@@ -543,23 +593,50 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 		return fmt.Errorf("GET svc fail : %s", err)
 	}
 
-	//check ingress
-	rmi := utils.NewToolsIngressForCR(instance)
-	if err := controllerutil.SetControllerReference(instance, rmi, r.scheme); err != nil {
-		return fmt.Errorf("SET ingress Owner fail : %s", err)
+	//如果资源所在的ns 与 ingress所在的ns不同，需要额外创建ExternalName类型的svc
+	if instance.Namespace != instance.Spec.IngressNamespace {
+		external := utils.NewToolsExternalSvcForCR(instance)
+		//关联控制
+		if err := controllerutil.SetControllerReference(instance, external, r.scheme); err != nil {
+			return fmt.Errorf("SET MQManagementTools tools external svc Owner fail : %s", err)
+		}
+		//检查是否已经存在
+		foundExternal := &corev1.Service{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: external.Name, Namespace: external.Namespace}, foundExternal)
+
+		if err != nil && errors.IsNotFound(err) {
+			//如果不存在新建
+			r.log.Info("Creating a new MQManagementTools external svc", "Namespace", external.Namespace, "Name", external.Name)
+			err = r.client.Create(context.TODO(), external)
+			if err != nil {
+				return fmt.Errorf("Create MQManagementTools external svc fail : %s", err)
+			}
+		} else if err != nil {
+			//如果发生错误重新调谐
+			return fmt.Errorf("GET MQManagementTools external svc fail : %s", err)
+		}
 	}
+
+	//check ingress
+	rmi := utils.NewIngressForCRIfNotExists(instance)
+	/*if err := controllerutil.SetControllerReference(instance, rmi, r.scheme); err != nil {
+		return fmt.Errorf("SET ingress Owner fail : %s", err)
+	}*/
 	foundKmi := &v1beta12.Ingress{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rmi.Name, Namespace: rmi.Namespace}, foundKmi)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new MQManagementTools ingress", "Namespace", rmi.Namespace, "Name", rmi.Name)
-		err = r.client.Create(context.TODO(), rmi)
-		if err != nil {
-			return fmt.Errorf("Create rabbitmq management ingress fail : %s", err)
-		}
-		instance.Status.Progress = 0.8
+		r.log.Info("Missing ingress", "Namespace", rmi.Namespace, "Name", rmi.Name)
+		return fmt.Errorf("Missing ingress")
 	} else if err != nil {
 		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+	} else {
+		utils.AppendRabbitMQToolsPathToIngress(instance, foundKmi)
+		err = r.client.Update(context.TODO(), foundKmi)
+		if err != nil {
+			return fmt.Errorf("update rabbitmq manager ingress fail : %s", err)
+		}
+		instance.Status.Progress = 0.8
 	}
 
 	return nil

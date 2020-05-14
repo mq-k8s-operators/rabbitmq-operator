@@ -31,7 +31,7 @@ type RabbitMQSpec struct {
 	StorageClassName string `json:"storage_class_name"`
 	// specify the hostname suffix for rabbitmq management UI,
 	// for example, when ObjectMeta.Name = test and this field is .rmq.com,
-	// we will generate a ingress whose rule host is test.rmq.com for kafka manager
+	// we will generate a ingress whose rule host is test.rmq.com for rabbitmq manager
 	// then you can bind hosts test.rmq.com to access it
 	// default value is .rmq.com
 	ManagerHost string `json:"rabbitmq_manager_host,omitempty"`
@@ -53,6 +53,8 @@ type RabbitMQSpec struct {
 	ToolsMemoryLimit   string `json:"tools_memory_limit,omitempty"`
 	ToolsCpuLimit      string `json:"tools_cpu_limit,omitempty"`
 	ToolsCpuRequest    string `json:"tools_cpu_request,omitempty"`
+	//for ingress
+	IngressNamespace string `json:"ingress_namespace,omitempty"`
 }
 
 // RabbitMQStatus defines the observed state of RabbitMQ
@@ -69,7 +71,7 @@ type RabbitMQStatus struct {
 	RabbitmqManagerUsername string  `json:rabbitmq_manager_username`
 	RabbitmqManagerPassword string  `json:rabbitmq_manager_password`
 	Progress                float32 `json:progress`
-	Replicas                int32   `json:kafka_replicas`
+	Replicas                int32   `json:rabbitmq_replicas`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -133,5 +133,10 @@ func CheckCR(cr *v1.RabbitMQ) bool {
 		changed = true
 	}
 
+	if cr.Spec.IngressNamespace == "" {
+		cr.Spec.IngressNamespace = "default"
+		changed = true
+	}
+
 	return changed
 }
