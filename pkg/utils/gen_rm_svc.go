@@ -40,7 +40,7 @@ func NewManagementExternalSvcForCR(cr *v1.RabbitMQ) *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "external-rmq-m-svc-" + cr.Namespace + "-" + cr.Name,
+			Name:      "external-" + cr.Namespace + "-rmq-m-svc-" + cr.Name,
 			Namespace: cr.Spec.IngressNamespace,
 		},
 		Spec: corev1.ServiceSpec{

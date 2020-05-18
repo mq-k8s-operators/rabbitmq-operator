@@ -9,9 +9,9 @@ import (
 
 func NewIngressForCRIfNotExists(cr *v1.RabbitMQ) *v1beta12.Ingress {
 	//通过比较资源的ns与ingress的配置ns来确定servicename要不要用external
-	servicename := "rmq-m-svc-" + cr.Namespace + "-" + cr.Name
+	servicename := "rmq-m-svc-" + cr.Name
 	if cr.Namespace != cr.Spec.IngressNamespace {
-		servicename = "external-" + servicename
+		servicename = "external-" + cr.Namespace + "-" + servicename
 	}
 
 	var annotations map[string]string
@@ -59,9 +59,9 @@ func NewIngressForCRIfNotExists(cr *v1.RabbitMQ) *v1beta12.Ingress {
 
 func AppendManagementPathToIngress(cr *v1.RabbitMQ, ingress *v1beta12.Ingress) {
 	//通过比较资源的ns与ingress的配置ns来确定servicename要不要用external
-	servicename := "rmq-m-svc-" + cr.Namespace + "-" + cr.Name
+	servicename := "rmq-m-svc-" + cr.Name
 	if cr.Namespace != cr.Spec.IngressNamespace {
-		servicename = "external-" + servicename
+		servicename = "external-" + cr.Namespace + "-" + servicename
 	}
 
 	path := v1beta12.HTTPIngressPath{
@@ -102,9 +102,9 @@ func DeleteManagementPathFromIngress(cr *v1.RabbitMQ, ingress *v1beta12.Ingress)
 
 func AppendRabbitMQToolsPathToIngress(cr *v1.RabbitMQ, ingress *v1beta12.Ingress) {
 	//通过比较资源的ns与ingress的配置ns来确定servicename要不要用external
-	servicename := "rmq-tools-svc-" + cr.Namespace + "-" + cr.Name
+	servicename := "rmq-tools-svc-" + cr.Name
 	if cr.Namespace != cr.Spec.IngressNamespace {
-		servicename = "external-" + servicename
+		servicename = "external-" + cr.Namespace + "-" + servicename
 	}
 
 	path := v1beta12.HTTPIngressPath{
