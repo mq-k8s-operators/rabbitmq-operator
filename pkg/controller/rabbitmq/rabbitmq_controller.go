@@ -95,6 +95,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}*/
 
+	// Watch for changes to secondary resource Deployment and requeue the owner Kafka
+	err = c.Watch(&source.Kind{Type: &v1.ServiceMonitor{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &lesolisev1.RabbitMQ{},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -183,7 +192,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace}, foundSa)
 	// if not exists
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating ServiceAccount for Namespace", sa.Namespace)
+		r.log.Info("在namespace下创建rabbitmq需要使用的ServiceAccount", "Namespace", sa.Namespace)
 		err = r.client.Create(context.TODO(), sa)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -199,7 +208,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, foundRole)
 	// if not exists
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating Role for Namespace", role.Namespace)
+		r.log.Info("在namespace下创建rabbitmq需要使用的Role", "Namespace", role.Namespace)
 		err = r.client.Create(context.TODO(), role)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -215,7 +224,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, foundRoleBinding)
 	// if not exists
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating RoleBinding for Namespace", roleBinding.Namespace)
+		r.log.Info("在namespace下创建rabbitmq需要使用的RoleBinding", "Namespace", roleBinding.Namespace)
 		err = r.client.Create(context.TODO(), roleBinding)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -235,11 +244,9 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 		r.reconcileServiceMonitor,
 	} {
 		if err = fun(instance); err != nil {
-			r.log.Info("reconcileClusterStatus with error")
 			r.reconcileClusterStatus(instance)
 			return reconcile.Result{}, err
 		} else {
-			r.log.Info("reconcileClusterStatus without error")
 			r.reconcileClusterStatus(instance)
 		}
 	}
@@ -259,7 +266,7 @@ func GetRandomString(l int) string {
 }
 
 func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (err error) {
-	r.log.Info("instance.DeletionTimestamp is ", instance.DeletionTimestamp)
+	r.log.Info("最终调谐")
 	// instance is not deleted
 	if instance.DeletionTimestamp.IsZero() {
 		if !utils.ContainsString(instance.ObjectMeta.Finalizers, utils.Finalizer) {
@@ -270,6 +277,7 @@ func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (
 		}
 		return r.cleanupOrphanPVCs(instance)
 	} else {
+		r.log.Info("最终调谐", "时间戳", instance.DeletionTimestamp)
 		// instance is deleted
 		if utils.ContainsString(instance.ObjectMeta.Finalizers, utils.Finalizer) {
 			if err = r.cleanUpAllPVCs(instance); err != nil {
@@ -289,7 +297,7 @@ func (r *ReconcileRabbitMQ) reconcileFinalizers(instance *lesolisev1.RabbitMQ) (
 				utils.DeleteRabbitMQToolsPathFromIngress(instance, foundIngress)
 				err = r.client.Update(context.TODO(), foundIngress)
 				if err != nil {
-					return fmt.Errorf("update ingress fail when reconcileFinalizers: %s", err)
+					return fmt.Errorf("删除ingress path出现问题: %s", err)
 				}
 			}
 
@@ -318,7 +326,7 @@ func (r *ReconcileRabbitMQ) cleanupOrphanPVCs(instance *lesolisev1.RabbitMQ) (er
 		if err != nil {
 			return err
 		}
-		r.log.Info("cleanupOrphanPVCs", "PVC Count", pvcCount, "ReadyReplicas Count", instance.Status.Replicas)
+		r.log.Info("清理孤儿PVC", "当前PVC数", pvcCount, "副本数", instance.Status.Replicas)
 		if pvcCount > int(instance.Spec.Size) {
 			pvcList, err := r.getPVCList(instance)
 			if err != nil {
@@ -366,19 +374,20 @@ func (r *ReconcileRabbitMQ) deletePVC(pvcItem corev1.PersistentVolumeClaim) {
 			Namespace: pvcItem.Namespace,
 		},
 	}
-	r.log.Info("Deleting PVC", "With Name", pvcItem.Name)
+	r.log.Info("删除PVC", "名称", pvcItem.Name)
 	err := r.client.Delete(context.TODO(), pvcDelete)
 	if err != nil {
-		r.log.Error(err, "Error deleteing PVC.", "Name", pvcDelete.Name)
+		r.log.Error(err, "删除PVC失败", "名称", pvcDelete.Name)
 	}
 }
 
 func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) error {
+	r.log.Info("调谐RabbitMQ")
 	//check config map
 	config := utils.NewConfigMapForCR(instance)
 	// Set rabbitmq instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, config, r.scheme); err != nil {
-		return fmt.Errorf("SET ConfigMap Owner fail : %s", err)
+		return fmt.Errorf("设置ConfigMap控制器引用失败: %s", err)
 	}
 
 	// check config map
@@ -386,60 +395,60 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, found)
 	// if not exists
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", config.Namespace, "ConfigMap.Name", config.Name)
+		r.log.Info("创建ConfigMap", "名称", config.Name)
 		err = r.client.Create(context.TODO(), config)
 		if err != nil {
-			return fmt.Errorf("Create ConfigMap fail : %s", err)
+			return fmt.Errorf("创建ConfigMap失败: %s", err)
 		}
 		instance.Status.Progress = 0.1
 	} else if err != nil {
 		// any exception
-		return fmt.Errorf("GET ConfigMap fail : %s", err)
+		return fmt.Errorf("获取ConfigMap失败: %s", err)
 	}
 
 	//check lb svc
 	lbsvc := utils.NewLBSvcForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, lbsvc, r.scheme); err != nil {
-		return fmt.Errorf("SET SVC Owner fail : %s", err)
+		return fmt.Errorf("设置service控制器引用失败: %s", err)
 	}
 	foundLbSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: lbsvc.Name, Namespace: lbsvc.Namespace}, foundLbSvc)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new lb svc", "Svc.Namespace", lbsvc.Namespace, "Svc.Name", lbsvc.Name)
+		r.log.Info("创建service", "名称", lbsvc.Name)
 		err = r.client.Create(context.TODO(), lbsvc)
 		if err != nil {
-			return fmt.Errorf("Create lb svc fail : %s", err)
+			return fmt.Errorf("创建service失败: %s", err)
 		}
 		instance.Status.Progress = 0.2
 	} else if err != nil {
-		return fmt.Errorf("GET svc fail : %s", err)
+		return fmt.Errorf("获取service失败: %s", err)
 	}
 
 	//prometheus metrics
 	monitorSvc := utils.NewMonitorSvcForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, monitorSvc, r.scheme); err != nil {
-		return fmt.Errorf("SET SVC Owner fail : %s", err)
+		return fmt.Errorf("设置监控svc控制器引用失败: %s", err)
 	}
 	foundMonitorSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: monitorSvc.Name, Namespace: monitorSvc.Namespace}, foundMonitorSvc)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new lb svc", "Svc.Namespace", monitorSvc.Namespace, "Svc.Name", monitorSvc.Name)
+		r.log.Info("创建监控svc", "名称", monitorSvc.Name)
 		err = r.client.Create(context.TODO(), monitorSvc)
 		if err != nil {
-			return fmt.Errorf("Create lb svc fail : %s", err)
+			return fmt.Errorf("创建监控svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.2
 	} else if err != nil {
-		return fmt.Errorf("GET svc fail : %s", err)
+		return fmt.Errorf("获取监控svc失败: %s", err)
 	}
 
 	//check sts
 	sts := utils.NewStsForCR(instance)
 	// Set sts as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, sts, r.scheme); err != nil {
-		return fmt.Errorf("SET RabbitMQ STS Owner fail : %s", err)
+		return fmt.Errorf("设置监控sts控制器引用失败: %s", err)
 	}
 
 	//check sts
@@ -447,58 +456,59 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: sts.Name, Namespace: sts.Namespace}, foundSts)
 	// if not exists
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new Sts", "Sts.Namespace", sts.Namespace, "Sts.Name", sts.Name)
+		r.log.Info("创建sts", "名称", sts.Name)
 		err = r.client.Create(context.TODO(), sts)
 		if err != nil {
-			return fmt.Errorf("Create sts fail : %s", err)
+			return fmt.Errorf("创建sts失败: %s", err)
 		}
 	} else if err != nil {
 		// any exception
-		return fmt.Errorf("GET sts fail : %s", err)
+		return fmt.Errorf("获取sts失败: %s", err)
 	} else {
 		// exists
 		utils.SyncRabbitMQSts(foundSts, sts)
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
-			return fmt.Errorf("Update ZK Fail : %s", err)
+			return fmt.Errorf("更新sts失败: %s", err)
 		}
 	}
 
 	//check rabbitmq cluster ready for use
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: sts.Name, Namespace: sts.Namespace}, foundSts)
 	if err != nil {
-		return fmt.Errorf("CHECK rabbitmq Status Fail : %s", err)
+		return fmt.Errorf("可用性检查获取sts失败: %s", err)
 	}
 
 	if foundSts.Status.ReadyReplicas != instance.Spec.Size {
-		r.log.Info("rabbitmq Not Ready", "Namespace", sts.Namespace, "Name", sts.Name)
+		r.log.Info("RabbitMQ未就绪", "名称", sts.Name)
 		instance.Status.Progress = float32(foundSts.Status.ReadyReplicas)/float32(foundSts.Status.Replicas)*0.3 + 0.2
-		return fmt.Errorf("rabbitmq Not Ready")
+		return fmt.Errorf("RabbitMQ未就绪")
 	}
-	r.log.Info("rabbitmq Ready", "Namespace", sts.Namespace, "Name", sts.Name, "found", found)
+	r.log.Info("RabbitMQ已就绪", "名称", sts.Name)
 	instance.Status.Replicas = instance.Spec.Size
 
 	return nil
 }
 
 func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.RabbitMQ) error {
+	r.log.Info("调谐RabbitMQ management")
 	//check svc
 	svc := utils.NewManagementSvcForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
-		return fmt.Errorf("SET Management SVC Owner fail : %s", err)
+		return fmt.Errorf("设置management svc控制器引用失败: %s", err)
 	}
 	foundSvc := &corev1.Service{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, foundSvc)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new Management svc", "Svc.Namespace", svc.Namespace, "Svc.Name", svc.Name)
+		r.log.Info("创建management svc", "名称", svc.Name)
 		err = r.client.Create(context.TODO(), svc)
 		if err != nil {
-			return fmt.Errorf("Create headless svc fail : %s", err)
+			return fmt.Errorf("创建management svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.6
 	} else if err != nil {
-		return fmt.Errorf("GET svc fail : %s", err)
+		return fmt.Errorf("获取management svc失败: %s", err)
 	}
 
 	//如果资源所在的ns 与 ingress所在的ns不同，需要额外创建ExternalName类型的svc
@@ -506,7 +516,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 		external := utils.NewManagementExternalSvcForCR(instance)
 		//关联控制
 		if err := controllerutil.SetControllerReference(instance, external, r.scheme); err != nil {
-			return fmt.Errorf("SET Management external svc Owner fail : %s", err)
+			return fmt.Errorf("设置management external svc控制器引用失败: %s", err)
 		}
 		//检查是否已经存在
 		foundExternal := &corev1.Service{}
@@ -514,14 +524,14 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 
 		if err != nil && errors.IsNotFound(err) {
 			//如果不存在新建
-			r.log.Info("Creating a new Management external svc", "Namespace", external.Namespace, "Name", external.Name)
+			r.log.Info("创建management external svc", "名称", external.Name)
 			err = r.client.Create(context.TODO(), external)
 			if err != nil {
-				return fmt.Errorf("Create Management external svc fail : %s", err)
+				return fmt.Errorf("创建management external svc失败: %s", err)
 			}
 		} else if err != nil {
 			//如果发生错误重新调谐
-			return fmt.Errorf("GET Management external svc fail : %s", err)
+			return fmt.Errorf("创建management external svc失败: %s", err)
 		}
 	}
 
@@ -534,19 +544,19 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rmi.Name, Namespace: rmi.Namespace}, foundKmi)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new rabbitmq management ingress", "Namespace", rmi.Namespace, "Name", rmi.Name)
+		r.log.Info("创建management ingress", "名称", rmi.Name)
 		err = r.client.Create(context.TODO(), rmi)
 		if err != nil {
-			return fmt.Errorf("Create rabbitmq management ingress fail : %s", err)
+			return fmt.Errorf("创建management ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.65
 	} else if err != nil {
-		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+		return fmt.Errorf("获取management ingress失败: %s", err)
 	} else {
 		utils.AppendManagementPathToIngress(instance, foundKmi)
 		err = r.client.Update(context.TODO(), foundKmi)
 		if err != nil {
-			return fmt.Errorf("update rabbitmq management ingress fail : %s", err)
+			return fmt.Errorf("更新management ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.65
 	}
@@ -555,42 +565,43 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 }
 
 func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.RabbitMQ) error {
+	r.log.Info("调谐管理工具")
 	//check
 	dep := utils.NewToolsForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
-		return fmt.Errorf("SET proxy Owner fail : %s", err)
+		return fmt.Errorf("设置管理工具控制器引用失败: %s", err)
 	}
 	found := &appsv1.Deployment{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, found)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new MQManagementTools", "Namespace", dep.Namespace, "Name", dep.Name)
+		r.log.Info("创建管理工具", "名称", dep.Name)
 		err = r.client.Create(context.TODO(), dep)
 		if err != nil {
-			return fmt.Errorf("Create proxy fail : %s", err)
+			return fmt.Errorf("创建管理工具失败: %s", err)
 		}
 		instance.Status.Progress = 0.7
 	} else if err != nil {
-		return fmt.Errorf("GET proxy fail : %s", err)
+		return fmt.Errorf("获取管理工具失败: %s", err)
 	}
 
 	//check svc
 	svc := utils.NewToolsSvcForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
-		return fmt.Errorf("SET Management SVC Owner fail : %s", err)
+		return fmt.Errorf("设置管理工具svc控制器引用失败: %s", err)
 	}
 	foundSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, foundSvc)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new MQManagementTools svc", "Svc.Namespace", svc.Namespace, "Svc.Name", svc.Name)
+		r.log.Info("创建管理工具svc", "名称", svc.Name)
 		err = r.client.Create(context.TODO(), svc)
 		if err != nil {
-			return fmt.Errorf("Create headless svc fail : %s", err)
+			return fmt.Errorf("创建管理工具svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.75
 	} else if err != nil {
-		return fmt.Errorf("GET svc fail : %s", err)
+		return fmt.Errorf("获取管理工具svc失败: %s", err)
 	}
 
 	//如果资源所在的ns 与 ingress所在的ns不同，需要额外创建ExternalName类型的svc
@@ -598,7 +609,7 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 		external := utils.NewToolsExternalSvcForCR(instance)
 		//关联控制
 		if err := controllerutil.SetControllerReference(instance, external, r.scheme); err != nil {
-			return fmt.Errorf("SET MQManagementTools tools external svc Owner fail : %s", err)
+			return fmt.Errorf("设置管理工具external svc控制器引用失败: %s", err)
 		}
 		//检查是否已经存在
 		foundExternal := &corev1.Service{}
@@ -606,14 +617,14 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 
 		if err != nil && errors.IsNotFound(err) {
 			//如果不存在新建
-			r.log.Info("Creating a new MQManagementTools external svc", "Namespace", external.Namespace, "Name", external.Name)
+			r.log.Info("创建管理工具external svc", "名称", external.Name)
 			err = r.client.Create(context.TODO(), external)
 			if err != nil {
-				return fmt.Errorf("Create MQManagementTools external svc fail : %s", err)
+				return fmt.Errorf("创建管理工具external svc失败: %s", err)
 			}
 		} else if err != nil {
 			//如果发生错误重新调谐
-			return fmt.Errorf("GET MQManagementTools external svc fail : %s", err)
+			return fmt.Errorf("创建管理工具external svc失败: %s", err)
 		}
 	}
 
@@ -626,15 +637,15 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: rmi.Name, Namespace: rmi.Namespace}, foundKmi)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Missing ingress", "Namespace", rmi.Namespace, "Name", rmi.Name)
-		return fmt.Errorf("Missing ingress")
+		r.log.Info("未找到ingress", "名称", rmi.Name)
+		return fmt.Errorf("未找到ingress")
 	} else if err != nil {
-		return fmt.Errorf("GET rabbitmq management ingress fail : %s", err)
+		return fmt.Errorf("获取ingress失败: %s", err)
 	} else {
 		utils.AppendRabbitMQToolsPathToIngress(instance, foundKmi)
 		err = r.client.Update(context.TODO(), foundKmi)
 		if err != nil {
-			return fmt.Errorf("update rabbitmq manager ingress fail : %s", err)
+			return fmt.Errorf("追加管理工具path到ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.8
 	}
@@ -643,42 +654,43 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 }
 
 func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ) error {
+	r.log.Info("调谐代理")
 	//check
 	dep := utils.NewProxyForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
-		return fmt.Errorf("SET proxy Owner fail : %s", err)
+		return fmt.Errorf("设置代理控制器引用失败: %s", err)
 	}
 	found := &appsv1.Deployment{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, found)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating a new Proxy", "Namespace", dep.Namespace, "Name", dep.Name)
+		r.log.Info("创建代理", "名称", dep.Name)
 		err = r.client.Create(context.TODO(), dep)
 		if err != nil {
-			return fmt.Errorf("Create proxy fail : %s", err)
+			return fmt.Errorf("创建代理失败: %s", err)
 		}
 		instance.Status.Progress = 0.9
 	} else if err != nil {
-		return fmt.Errorf("GET proxy fail : %s", err)
+		return fmt.Errorf("更新代理失败: %s", err)
 	}
 
 	//check svc
 	svc := utils.NewMqpSvcForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
-		return fmt.Errorf("SET mqp svc Owner fail : %s", err)
+		return fmt.Errorf("设置代理svc控制器引用失败: %s", err)
 	}
 	foundSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, foundSvc)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating proxy svc", "Namespace", svc.Namespace, "Name", svc.Name)
+		r.log.Info("创建代理svc", "名称", svc.Name)
 		err = r.client.Create(context.TODO(), svc)
 		if err != nil {
-			return fmt.Errorf("Create proxy svc fail : %s", err)
+			return fmt.Errorf("创建代理svc失败: %s", err)
 		}
 		instance.Status.Progress = 1.0
 	} else if err != nil {
-		return fmt.Errorf("GET proxy svc fail : %s", err)
+		return fmt.Errorf("获取代理svc失败: %s", err)
 	}
 
 	instance.Status.Progress = 1.0
@@ -686,22 +698,23 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 }
 
 func (r *ReconcileRabbitMQ) reconcileServiceMonitor(instance *lesolisev1.RabbitMQ) (err error) {
+	r.log.Info("调谐监控")
 	svcm := utils.NewSvcMonitorForCR(instance)
 	if err := controllerutil.SetControllerReference(instance, svcm, r.scheme); err != nil {
-		return fmt.Errorf("SET svcm Owner fail : %s", err)
+		return fmt.Errorf("设置监控service monitor控制器引用失败: %s", err)
 	}
 	foundSvcm := &v12.ServiceMonitor{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: foundSvcm.Name, Namespace: foundSvcm.Namespace}, foundSvcm)
 
 	if err != nil && errors.IsNotFound(err) {
-		r.log.Info("Creating exporter svc", "Namespace", svcm.Namespace, "Name", svcm.Name)
+		r.log.Info("创建监控service monitor", "名称", svcm.Name)
 		err = r.client.Create(context.TODO(), svcm)
 		if err != nil {
-			return fmt.Errorf("Create svcm fail : %s", err)
+			return fmt.Errorf("创建监控service monitor失败: %s", err)
 		}
 		instance.Status.Progress = 1.0
 	} else if err != nil {
-		return fmt.Errorf("GET svcm fail : %s", err)
+		return fmt.Errorf("获取监控service monitor失败: %s", err)
 	}
 
 	return nil
