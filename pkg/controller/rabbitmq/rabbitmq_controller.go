@@ -130,7 +130,7 @@ type reconcileFun func(cluster *lesolisev1.RabbitMQ) error
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	r.log = log.WithValues("Namespace", request.Namespace, "Name", request.Name)
-	r.log.Info("Reconciling RabbitMQ")
+	r.log.Info("调谐中")
 
 	// Fetch the RabbitMQ instance
 	instance := &lesolisev1.RabbitMQ{}
@@ -150,14 +150,15 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 	changed := utils.CheckCR(instance)
 
 	if changed {
-		r.log.Info("Setting default settings for RabbitMQ")
+		r.log.Info("设置默认配置")
 		if err := r.client.Update(context.TODO(), instance); err != nil {
-			return reconcile.Result{}, fmt.Errorf("Setting default fail : %s", err)
+			return reconcile.Result{}, fmt.Errorf("设置默认配置失败: %s", err)
 		}
 		//retry reconcile
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	//设置常量值
 	if instance.Status.RabbitmqManagerPassword == "" {
 		instance.Status.RabbitmqManagerPassword = GetRandomString(16)
 	}
@@ -184,6 +185,7 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 			instance.Status.RabbitmqManagerUrl = instance.Spec.ManagerHostAlias + instance.Status.RabbitmqManagerPath
 		}
 	}
+	//马上保存这些常量值
 	r.reconcileClusterStatus(instance)
 
 	// check ServiceAccount
