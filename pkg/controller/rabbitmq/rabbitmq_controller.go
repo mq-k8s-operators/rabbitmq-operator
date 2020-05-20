@@ -96,7 +96,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}*/
 
 	// Watch for changes to secondary resource Deployment and requeue the owner Kafka
-	err = c.Watch(&source.Kind{Type: &v1.ServiceMonitor{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &v12.ServiceMonitor{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &lesolisev1.RabbitMQ{},
 	})
