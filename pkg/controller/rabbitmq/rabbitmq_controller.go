@@ -114,9 +114,10 @@ var _ reconcile.Reconciler = &ReconcileRabbitMQ{}
 type ReconcileRabbitMQ struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	log    logr.Logger
+	client     client.Client
+	scheme     *runtime.Scheme
+	log        logr.Logger
+	needUpdate bool
 }
 
 type reconcileFun func(cluster *lesolisev1.RabbitMQ) error
@@ -131,6 +132,7 @@ type reconcileFun func(cluster *lesolisev1.RabbitMQ) error
 func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	r.log = log.WithValues("Namespace", request.Namespace, "Name", request.Name)
 	r.log.Info("调谐中")
+	r.needUpdate = false
 
 	// Fetch the RabbitMQ instance
 	instance := &lesolisev1.RabbitMQ{}
@@ -160,25 +162,32 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 
 	//设置常量值
 	if instance.Status.RabbitmqManagerPassword == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqManagerPassword = GetRandomString(16)
 	}
 	if instance.Status.RabbitmqManagerUsername == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqManagerUsername = "rmq_admin"
 	}
 	if instance.Status.RabbitmqUrl == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqUrl = "rmq-svc-" + instance.Name
 	}
 	if instance.Status.RabbitmqPort == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqPort = "5672"
 	}
 	if instance.Status.RabbitmqProxyUrl == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqProxyUrl = "rmq-mqp-svc-" + instance.Name + ":8080"
 	}
 	if instance.Status.RabbitmqManagerPath == "" {
+		r.needUpdate = true
 		instance.Status.RabbitmqManagerPath = "/" + instance.Namespace + "-" + instance.Name + "-rabbitmq/"
 	}
 
 	if instance.Status.RabbitmqManagerUrl == "" {
+		r.needUpdate = true
 		if instance.Spec.ManagerHostAlias == "" {
 			instance.Status.RabbitmqManagerUrl = instance.Spec.ManagerHost + instance.Status.RabbitmqManagerPath
 		} else {
@@ -253,6 +262,11 @@ func (r *ReconcileRabbitMQ) Reconcile(request reconcile.Request) (reconcile.Resu
 		}
 	}
 
+	if instance.Status.Progress != 1.0 {
+		instance.Status.Progress = 1.0
+		r.needUpdate = true
+		r.reconcileClusterStatus(instance)
+	}
 	return reconcile.Result{}, nil
 }
 
@@ -403,6 +417,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 			return fmt.Errorf("创建ConfigMap失败: %s", err)
 		}
 		instance.Status.Progress = 0.1
+		r.needUpdate = true
 	} else if err != nil {
 		// any exception
 		return fmt.Errorf("获取ConfigMap失败: %s", err)
@@ -422,7 +437,8 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 		if err != nil {
 			return fmt.Errorf("创建service失败: %s", err)
 		}
-		instance.Status.Progress = 0.2
+		instance.Status.Progress = 0.15
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取service失败: %s", err)
 	}
@@ -442,6 +458,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 			return fmt.Errorf("创建监控svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.2
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取监控svc失败: %s", err)
 	}
@@ -468,10 +485,12 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 		return fmt.Errorf("获取sts失败: %s", err)
 	} else {
 		// exists
-		utils.SyncRabbitMQSts(foundSts, sts)
-		err = r.client.Update(context.TODO(), found)
-		if err != nil {
-			return fmt.Errorf("更新sts失败: %s", err)
+		if foundSts.Spec.Replicas != sts.Spec.Replicas {
+			utils.SyncRabbitMQSts(foundSts, sts)
+			err = r.client.Update(context.TODO(), found)
+			if err != nil {
+				return fmt.Errorf("更新sts失败: %s", err)
+			}
 		}
 	}
 
@@ -484,6 +503,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQ(instance *lesolisev1.RabbitMQ) err
 	if foundSts.Status.ReadyReplicas != instance.Spec.Size {
 		r.log.Info("RabbitMQ未就绪", "名称", sts.Name)
 		instance.Status.Progress = float32(foundSts.Status.ReadyReplicas)/float32(foundSts.Status.Replicas)*0.3 + 0.2
+		r.needUpdate = false
 		return fmt.Errorf("RabbitMQ未就绪")
 	}
 	r.log.Info("RabbitMQ已就绪", "名称", sts.Name)
@@ -509,6 +529,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 			return fmt.Errorf("创建management svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.6
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取management svc失败: %s", err)
 	}
@@ -552,6 +573,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 			return fmt.Errorf("创建management ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.65
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取management ingress失败: %s", err)
 	} else {
@@ -561,6 +583,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQManager(instance *lesolisev1.Rabbit
 			return fmt.Errorf("更新management ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.65
+		r.needUpdate = false
 	}
 
 	return nil
@@ -583,6 +606,7 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 			return fmt.Errorf("创建管理工具失败: %s", err)
 		}
 		instance.Status.Progress = 0.7
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取管理工具失败: %s", err)
 	}
@@ -602,6 +626,7 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 			return fmt.Errorf("创建管理工具svc失败: %s", err)
 		}
 		instance.Status.Progress = 0.75
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取管理工具svc失败: %s", err)
 	}
@@ -650,6 +675,7 @@ func (r *ReconcileRabbitMQ) reconcileMQManagementTools(instance *lesolisev1.Rabb
 			return fmt.Errorf("追加管理工具path到ingress失败: %s", err)
 		}
 		instance.Status.Progress = 0.8
+		r.needUpdate = false
 	}
 
 	return nil
@@ -672,6 +698,7 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 			return fmt.Errorf("创建代理失败: %s", err)
 		}
 		instance.Status.Progress = 0.9
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("更新代理失败: %s", err)
 	}
@@ -690,12 +717,12 @@ func (r *ReconcileRabbitMQ) reconcileRabbitMQProxy(instance *lesolisev1.RabbitMQ
 		if err != nil {
 			return fmt.Errorf("创建代理svc失败: %s", err)
 		}
-		instance.Status.Progress = 1.0
+		instance.Status.Progress = 0.95
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取代理svc失败: %s", err)
 	}
 
-	instance.Status.Progress = 1.0
 	return nil
 }
 
@@ -706,7 +733,7 @@ func (r *ReconcileRabbitMQ) reconcileServiceMonitor(instance *lesolisev1.RabbitM
 		return fmt.Errorf("设置监控service monitor控制器引用失败: %s", err)
 	}
 	foundSvcm := &v12.ServiceMonitor{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: foundSvcm.Name, Namespace: foundSvcm.Namespace}, foundSvcm)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: svcm.Name, Namespace: svcm.Namespace}, foundSvcm)
 
 	if err != nil && errors.IsNotFound(err) {
 		r.log.Info("创建监控service monitor", "名称", svcm.Name)
@@ -715,6 +742,7 @@ func (r *ReconcileRabbitMQ) reconcileServiceMonitor(instance *lesolisev1.RabbitM
 			return fmt.Errorf("创建监控service monitor失败: %s", err)
 		}
 		instance.Status.Progress = 1.0
+		r.needUpdate = true
 	} else if err != nil {
 		return fmt.Errorf("获取监控service monitor失败: %s", err)
 	}
@@ -723,5 +751,10 @@ func (r *ReconcileRabbitMQ) reconcileServiceMonitor(instance *lesolisev1.RabbitM
 }
 
 func (r *ReconcileRabbitMQ) reconcileClusterStatus(instance *lesolisev1.RabbitMQ) error {
-	return r.client.Status().Update(context.TODO(), instance)
+	if r.needUpdate {
+		r.log.Info("更新状态")
+		return r.client.Status().Update(context.TODO(), instance)
+	} else {
+		return nil
+	}
 }
